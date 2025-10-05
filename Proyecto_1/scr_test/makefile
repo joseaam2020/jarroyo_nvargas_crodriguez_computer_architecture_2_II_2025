@@ -2,6 +2,8 @@ CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra
 
 TARGET = mesi_simulator
+BUILD_DIR = build
+SOURCES_DIR = .
 
 SOURCES = main.cpp \
           mesi_protocol.cpp \
@@ -11,20 +13,26 @@ SOURCES = main.cpp \
           memory.cpp \
           processing_element.cpp
 
-OBJECTS = $(SOURCES:.cpp=.o)
+# Colocar objetos en build y mantener estructura de carpetas si es necesario
+OBJECTS = $(SOURCES:%.cpp=$(BUILD_DIR)/%.o)
 
-all: $(TARGET)
+# Crear estructura de directorios necesaria
+$(shell mkdir -p $(BUILD_DIR))
 
-$(TARGET): $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJECTS)
+all: $(BUILD_DIR)/$(TARGET)
 
-%.o: %.cpp
+$(BUILD_DIR)/$(TARGET): $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJECTS)
+
+# Regla para compilar cada archivo .cpp a .o en build/
+$(BUILD_DIR)/%.o: $(SOURCES_DIR)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -rf $(BUILD_DIR)
 
-run: $(TARGET)
-	./$(TARGET)
+run: $(BUILD_DIR)/$(TARGET)
+	./$(BUILD_DIR)/$(TARGET)
 
 .PHONY: all clean run

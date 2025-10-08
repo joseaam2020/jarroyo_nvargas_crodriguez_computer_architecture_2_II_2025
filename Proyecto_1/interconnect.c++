@@ -15,7 +15,7 @@ public:
     }
 
 //Read every PE request to access 
-    uint64_t request_read(int id_pe, uint32_t address){
+    uint64_t pe_request(int id_pe, uint32_t address){
 
     }
 

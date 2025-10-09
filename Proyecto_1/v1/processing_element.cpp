@@ -6,19 +6,19 @@ ProcessingElement::ProcessingElement(int id) : pe_id(id) {
 
 ProcessingElement::~ProcessingElement() {}
 
-void ProcessingElement::load(short reg, int dir) {
+void ProcessingElement::load(short reg, short regd) {
   // Dato en cache
-  if (isValidRegister(reg)) {
-    double data = this->cache->getData(dir);
+  if (isValidRegister(reg) & isValidRegister(regd)) {
+    double data = this->cache->getData(this->regs[regd]);
     this->regs[reg] = data;
   }
 }
 
-void ProcessingElement::store(short reg, int dir) {
+void ProcessingElement::store(short reg, short regd) {
   // Guardar dato en cache
-  if (isValidRegister(reg)) {
+  if (isValidRegister(reg) & isValidRegister(regd)) {
     double value = this->regs[reg];
-    this->cache->setData(dir, value);
+    this->cache->setData(this->regs[regd], value);
   }
 }
 
@@ -52,6 +52,12 @@ void ProcessingElement::dec(short reg) {
 
 void ProcessingElement::jnz(char *label) {
   // Modificar el pc para ejecutar la instrucciones
+}
+
+void ProcessingElement::mov(short reg, double value) {
+  if (isValidRegister(reg)) {
+    this->regs[reg] = value;
+  }
 }
 
 void ProcessingElement::printStatus() const {

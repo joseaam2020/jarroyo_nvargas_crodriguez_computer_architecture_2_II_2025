@@ -19,13 +19,14 @@ public:
   ProcessingElement(int id);
   ~ProcessingElement();
 
-  void load(short reg, int dir);
-  void store(short reg, int dir);
+  void load(short reg, short regd);
+  void store(short reg, short regd);
   void fmul(short regd, short ra, short rb);
   void fadd(short regd, short ra, short rb);
   void inc(short reg);
   void dec(short reg);
   void jnz(char *label);
+  void mov(short reg, double value);
 
   int getPEId() const { return pe_id; }
 

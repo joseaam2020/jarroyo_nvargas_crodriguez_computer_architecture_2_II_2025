@@ -1,22 +1,25 @@
 #include "processing_element.h"
-#include <iostream>
 
-ProcessingElement::ProcessingElement(int id) : pe_id(id) {}
+ProcessingElement::ProcessingElement(int id) : pe_id(id) {
+  this->cache = new Cache(id);
+}
 
 ProcessingElement::~ProcessingElement() {}
 
 void ProcessingElement::load(short reg, int dir) {
   // Dato en cache
-  // Si el dato es valido Hit
-  // Si el dato no es valido hacer broadcast para recibir de otra cache
-  // No esta en cache
-  // Hacer broadcast para recibir de otra cache o de memoria
+  if (isValidRegister(reg)) {
+    double data = this->cache->getData(dir);
+    this->regs[reg] = data;
+  }
 }
 
 void ProcessingElement::store(short reg, int dir) {
   // Guardar dato en cache
-  // Hacer broadcast de store para que las demas caches sepan que escribi el
-  // dato
+  if (isValidRegister(reg)) {
+    double value = this->regs[reg];
+    this->cache->setData(dir, value);
+  }
 }
 
 void ProcessingElement::fmul(short regd, short ra, short rb) {
@@ -51,7 +54,28 @@ void ProcessingElement::jnz(char *label) {
   // Modificar el pc para ejecutar la instrucciones
 }
 
-void ProcessingElement::printStatus() const {}
+void ProcessingElement::printStatus() const {
+  std::cout << "============================\n";
+  std::cout << "Estado del Processing Element (PE " << pe_id << ")\n";
+  std::cout << "----------------------------\n";
+  std::cout << "Registros:\n";
+
+  for (int i = 0; i < NUMERO_REGISTROS; ++i) {
+    std::cout << "  R" << i << ": " << std::fixed << std::setprecision(4)
+              << regs[i] << "\n";
+  }
+
+  std::cout << "----------------------------\n";
+  std::cout << "Estado de la Cache:\n";
+
+  if (cache) {
+    cache->printCache();
+  } else {
+    std::cout << "  (Cache no asignada)\n";
+  }
+
+  std::cout << "============================\n";
+}
 
 bool ProcessingElement::isValidRegister(short reg) const {
   if (reg < 0 || reg >= NUMERO_REGISTROS) {

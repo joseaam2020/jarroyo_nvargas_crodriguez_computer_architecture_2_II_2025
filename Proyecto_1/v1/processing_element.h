@@ -1,13 +1,17 @@
 #ifndef PROCESSING_ELEMENT_H
 #define PROCESSING_ELEMENT_H
 
+#include "cache.h"
 #include <cstdint>
+#include <iomanip> // Para formatear decimales
+#include <iostream>
 #define NUMERO_REGISTROS 8
 
 class ProcessingElement {
 private:
   int pe_id;
   double regs[NUMERO_REGISTROS] = {};
+  Cache *cache;
 
   bool isValidRegister(short reg) const;
 

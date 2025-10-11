@@ -26,6 +26,7 @@ public:
   BusResult broadcastRead(int requesting_pe, int address);
   BusResult broadcastReadX(int requesting_pe, int address);
   void broadcastInvalidate(int requesting_pe, int address);
+  void writeToMem(int address, double value);
 
   void printBusActivity(const std::string &message);
 };

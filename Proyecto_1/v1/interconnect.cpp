@@ -83,3 +83,7 @@ void Interconnect::broadcastInvalidate(int requesting_pe, int address) {
 void Interconnect::printBusActivity(const std::string &message) {
   std::cout << "[BUS] " << message << std::endl;
 }
+
+void Interconnect::writeToMem(int address, double value) {
+  memory->write(address, value);
+}

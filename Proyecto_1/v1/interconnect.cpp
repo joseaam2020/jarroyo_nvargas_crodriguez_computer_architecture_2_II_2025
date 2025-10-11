@@ -1,4 +1,5 @@
 #include "interconnect.h"
+#include "snoop.h"
 #include <iostream>
 
 Interconnect::Interconnect(Memory *mem) : memory(mem) {}
@@ -9,73 +10,59 @@ void Interconnect::registerSnoopModule(SnoopModule *snoop) {
 }
 
 // Señal de lectura desde el snoop
-Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe,
-                                                    int address) {
+Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe, int address) {
   std::cout << "\n[BUS] PE" << requesting_pe << " broadcasts READ for address "
             << address << std::endl;
-
+  
   BusResult result;
+  
   // Reviso cada snoop, me devuelve el estado de cada uno.
   for (auto snoop : snoop_modules) {
+    
+    // No preguntar al mismo PE que está haciendo el request
+    if (snoop->getPEId() == requesting_pe) {
+      continue;
+    }
+    
     auto response = snoop->handleBusRead(address);
+    
     // Si es un hit
     if (response.hit) {
       result.shared = true;
-      result.data = response.data;
-
-      if (response.modified) {
-        result.modified = true;
-        std::cout << "  [BUS] Cache provides modified data, flushing to memory"
-                  << std::endl;
-        memory->write(address, response.data);
+      // Copiar los datos del bloque completo
+      for (int i = 0; i < 4; i++) {
+        result.data[i] = response.data[i];
       }
+      
     }
   }
+
+  std::array<double, 4> block; // Para retornar el bloque
+  
   // Si nadie lo tiene voy a memoria a leer el dato
   if (!result.modified && !result.shared) {
     std::cout << "  [BUS] No cache hit, fetching from memory" << std::endl;
-    result.data = memory->read(address);
-  }
-
-  return result;
-}
-// En el caso de que sea exclusive
-Interconnect::BusResult Interconnect::broadcastReadX(int requesting_pe,
-                                                     int address) {
-  std::cout << "\n[BUS] PE" << requesting_pe
-            << " broadcasts READ_X (exclusive) for address " << address
-            << std::endl;
-
-  // Espacio para el estado.
-  BusResult result;
-
-  for (auto snoop : snoop_modules) {
-    auto response = snoop->handleBusReadX(address);
-
-    if (response.hit && response.modified) {
-      result.modified = true;
-      result.data = response.data;
-      std::cout << "  [BUS] Cache provides modified data, flushing to memory"
-                << std::endl;
-      memory->write(address, response.data);
-    } else if (response.hit) {
-      result.data = response.data;
+    block = memory->read(address);
+    // Copiar datos de memoria al resultado
+    for (int i = 0; i < 4; i++) {
+      result.data[i] = block[i];
     }
   }
-
-  if (!result.modified) {
-    std::cout << "  [BUS] Fetching from memory" << std::endl;
-    result.data = memory->read(address);
-  }
-
+  
   return result;
 }
+
 // Notifico a las snoops en ponerse en invalidate
 void Interconnect::broadcastInvalidate(int requesting_pe, int address) {
   std::cout << "\n[BUS] PE" << requesting_pe
             << " broadcasts INVALIDATE for address " << address << std::endl;
-
+  
   for (auto snoop : snoop_modules) {
+    // Saltar el PE que está solicitando sin invalidarse a sí mismo
+    if (snoop->getPEId() == requesting_pe) {
+      continue;
+    }
+    
     snoop->handleBusInvalidate(address);
   }
 }

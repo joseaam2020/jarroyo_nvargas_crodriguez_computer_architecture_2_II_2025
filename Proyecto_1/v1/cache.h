@@ -34,7 +34,7 @@ private:
   std::vector<std::vector<CacheLine>> sets;
 
 public:
-  Cache(int id, SnoopModule *snoop);
+  Cache(int id);
 
   /*
   puede que no sea necesario?
@@ -51,6 +51,7 @@ public:
 
   int getPEId() const { return pe_id; }
   void printCache() const;
+  void setSnoop(SnoopModule *snoop);
 };
 
 #endif

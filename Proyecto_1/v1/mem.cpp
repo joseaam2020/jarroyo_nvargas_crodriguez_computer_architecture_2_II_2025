@@ -20,10 +20,17 @@ std::array<double, 4> Memory::read(int address) {
   // Alinear al inicio del bloque (bloque de 4 palabras)
   int block_start = word_index - (word_index % 4);
 
+  std::cout << "Address" << address << std::endl;
+  std::cout << "Word Index " << word_index << std::endl;
+  std::cout << "Block start" << block_start << std::endl;
+
   // Leer las 4 palabras del bloque
   std::array<double, 4> block;
   for (int i = 0; i < 4; i++) {
     block[i] = storage[block_start + i];
+    std::cout << "Dato " << i << " leido : " << storage[block_start + i]
+              << std::endl;
+    std::cout << "Dato " << i << " Recibido : " << block[i] << std::endl;
   }
 
   return block;
@@ -91,19 +98,19 @@ int Memory::error(int address) {
   }
 }
 
-// Main de Pueba
-
-int main() {
-  Memory mem;
-
-  mem.initialize(0, 0.6);
-  mem.write(8, 1.5);
-
-  auto block = mem.read(8);
-  for (auto value : block) {
-    std::cout << "Value: " << value << std::endl;
-  }
-
-  mem.printMemory();
-  return 0;
-}
+//// Main de Pueba
+//
+// int main() {
+//  Memory mem;
+//
+//  mem.initialize(0, 0.6);
+//  mem.write(8, 1.5);
+//
+//  auto block = mem.read(8);
+//  for (auto value : block) {
+//    std::cout << "Value: " << value << std::endl;
+//  }
+//
+//  mem.printMemory();
+//  return 0;
+//}

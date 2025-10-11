@@ -1,8 +1,9 @@
 #include "cache.h"
 #include "mesi_state.h"
+#include <iostream>
 #include <ostream>
 
-Cache::Cache(int id, SnoopModule *snoop) : pe_id(id), snoop(snoop) {
+Cache::Cache(int id) : pe_id(id) {
   sets.resize(num_sets, std::vector<CacheLine>(num_ways));
 }
 
@@ -49,6 +50,10 @@ double Cache::getData(int addr) {
     }
 
     CacheLine new_line = this->snoop->handleReadMiss(addr);
+    for (int i = 0; i < 4; i++) {
+      std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
+                << std::endl;
+    }
     new_line.tag = tag;
     new_line.usage_count = 1;
 
@@ -145,3 +150,5 @@ CacheLine *Cache::getLine(int address) {
   }
   return nullptr;
 }
+
+void Cache::setSnoop(SnoopModule *snoop) { this->snoop = snoop; }

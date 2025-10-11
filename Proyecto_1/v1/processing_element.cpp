@@ -1,7 +1,11 @@
 #include "processing_element.h"
+#include "interconnect.h"
+#include "snoop.h"
 
-ProcessingElement::ProcessingElement(int id) : pe_id(id) {
+ProcessingElement::ProcessingElement(int id, Interconnect *bus) : pe_id(id) {
   this->cache = new Cache(id);
+  this->snoop = new SnoopModule(id, this->cache, bus);
+  this->cache->setSnoop(this->snoop);
 }
 
 ProcessingElement::~ProcessingElement() {}

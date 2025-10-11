@@ -40,7 +40,13 @@ double Cache::getData(int addr) {
 
     CacheLine old_line = sets[index][lfu_way];
 
-    // Actualizar memoria si tag diferente de 1;
+    // Actualizar memoria si tag diferente de -1;
+    int base_index = word_index - offset;
+    if (tag != -1 && old_line.state != mesi_state::INVALID) {
+      for (short i = 0; i < 4; i++) {
+        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+      }
+    }
 
     CacheLine new_line = this->snoop->handleReadMiss(addr);
     new_line.tag = tag;
@@ -80,6 +86,12 @@ void Cache::setData(int addr, double value) {
     CacheLine old_line = sets[index][lfu_way];
 
     // Actualizar memoria si tag diferente de 1;
+    int base_index = word_index - offset;
+    if (tag != -1 && old_line.state != mesi_state::INVALID) {
+      for (short i = 0; i < 4; i++) {
+        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+      }
+    }
 
     line.tag = tag;
     line.usage_count = 1;

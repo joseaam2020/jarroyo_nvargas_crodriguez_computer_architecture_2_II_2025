@@ -146,3 +146,7 @@ CacheLine SnoopModule::handleWrite(int address, double value) {
   }
   return new_line;
 }
+
+void SnoopModule::writeToMem(int address, double value) {
+  interconnect->writeToMem(address, value);
+}

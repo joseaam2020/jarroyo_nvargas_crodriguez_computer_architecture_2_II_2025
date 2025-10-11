@@ -87,6 +87,8 @@ public:
 
   // Setter para interconnect (solo en caso de necesitar)
   void setInterconnect(Interconnect *ic) { interconnect = ic; }
+
+  void writeToMem(int address, double value);
 };
 
 #endif

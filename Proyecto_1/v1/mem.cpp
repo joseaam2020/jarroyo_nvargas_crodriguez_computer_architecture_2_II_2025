@@ -1,4 +1,5 @@
 #include "mem.h"
+#include <ostream>
 
 // Número de posiciones de la memoria, tamaño fijo de la memoria
 #define MEM_SIZE 512
@@ -20,10 +21,17 @@ std::array<double, 4> Memory::read(int address) {
   // Alinear al inicio del bloque (bloque de 4 palabras)
   int block_start = word_index - (word_index % 4);
 
+  std::cout << "Address " << address << std::endl;
+  std::cout << "Word Index " << word_index << std::endl;
+  std::cout << "Block start " << block_start << std::endl;
+
   // Leer las 4 palabras del bloque
   std::array<double, 4> block;
   for (int i = 0; i < 4; i++) {
+    std::cout << "Prueba: " << storage[0] << std::endl;
     block[i] = storage[block_start + i];
+    std::cout << "Dato " << i << " Leido : " << storage[block_start + i]
+              << std::endl;
   }
 
   return block;
@@ -91,19 +99,25 @@ int Memory::error(int address) {
   }
 }
 
-// Main de Pueba
+//// Main de Pueba
 
-int main() {
-  Memory mem;
-
-  mem.initialize(0, 0.6);
-  mem.write(8, 1.5);
-
-  auto block = mem.read(8);
-  for (auto value : block) {
-    std::cout << "Value: " << value << std::endl;
-  }
-
-  mem.printMemory();
-  return 0;
-}
+// int main() {
+//   Memory *memory = new Memory();
+//   memory->initialize(0, 15.0);
+//   memory->initialize(8, 13.9);
+//   memory->initialize(16, 41.3);
+//   memory->initialize(24, 100.8);
+//
+//   memory->initialize(32, 30.0);
+//   memory->initialize(40, 27.8);
+//   memory->initialize(48, 82.6);
+//   memory->initialize(56, 201.6);
+//
+//   auto block = memory->read(0);
+//   for (auto value : block) {
+//     std::cout << "Value: " << value << std::endl;
+//   }
+//
+//   memory->printMemory();
+//   return 0;
+// }

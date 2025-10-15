@@ -2,6 +2,7 @@
 #define PROCESSING_ELEMENT_H
 
 #include "cache.h"
+#include "snoop.h"
 #include <cstdint>
 #include <iomanip> // Para formatear decimales
 #include <iostream>
@@ -12,11 +13,12 @@ private:
   int pe_id;
   double regs[NUMERO_REGISTROS] = {};
   Cache *cache;
+  SnoopModule *snoop;
 
   bool isValidRegister(short reg) const;
 
 public:
-  ProcessingElement(int id);
+  ProcessingElement(int id, Interconnect *bus);
   ~ProcessingElement();
 
   void load(short reg, short regd);
@@ -29,6 +31,7 @@ public:
   void mov(short reg, double value);
 
   int getPEId() const { return pe_id; }
+  SnoopModule *getSnoop() { return snoop; }
 
   void printStatus() const;
 };

@@ -1,7 +1,11 @@
 #include "processing_element.h"
+#include "interconnect.h"
+#include "snoop.h"
 
-ProcessingElement::ProcessingElement(int id) : pe_id(id) {
+ProcessingElement::ProcessingElement(int id, Interconnect *bus) : pe_id(id) {
   this->cache = new Cache(id);
+  this->snoop = new SnoopModule(id, this->cache, bus);
+  this->cache->setSnoop(this->snoop);
 }
 
 ProcessingElement::~ProcessingElement() {}
@@ -10,6 +14,8 @@ void ProcessingElement::load(short reg, short regd) {
   // Dato en cache
   if (isValidRegister(reg) & isValidRegister(regd)) {
     double data = this->cache->getData(this->regs[regd]);
+    std::cout << "Guardando direccion: " << regd << "en registro " << reg
+              << std::endl;
     this->regs[reg] = data;
   }
 }

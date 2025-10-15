@@ -1,5 +1,5 @@
-#ifndef MEMORY_H
-#define MEMORY_H
+#ifndef MEM_H
+#define MEM_H
 
 #include <array>
 #include <cstdint> // para uint64_t

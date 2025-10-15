@@ -1,51 +1,68 @@
 #include "cache.h"
+#include "mesi_state.h"
+#include <iostream>
+#include <ostream>
 
 Cache::Cache(int id) : pe_id(id) {
   sets.resize(num_sets, std::vector<CacheLine>(num_ways));
 }
 
 double Cache::getData(int addr) {
+
   // 1. Verificar alineación
   if (addr % 8 != 0) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
   }
 
-  // 2. Calcular campos de la dirección
-  int word_index = addr / 8;
-  int offset = word_index % 4; // posición en el bloque (0 a 3)
-  int block_number = word_index / 4;
-  int index = block_number % 8; // set index (0 a 7)
-  int tag = addr >> 8;          // parte alta de la dirección
+  CacheLine *line = this->getLine(addr); // Buscar en Cache
 
-  // 3. Buscar si el bloque está en la caché (HIT)
-  for (int way = 0; way < num_ways; ++way) {
-    CacheLine &line = sets[index][way];
-    if (line.tag == tag) {
-      // ‼️ IMPORTANTE hay que revisar que sea valido
-      line.usage_count++;       // aumentar frecuencia de uso
-      return line.data[offset]; // devolver valor almacenado
+  if (line &&
+      line->state != mesi_state::INVALID) { // Si se encuentra retornar valor en
+                                            // cache y es valida
+    int word_index = addr / 8;
+    int offset = word_index % 4; // posición en el bloque (0 a 3)
+    return line->data[offset];
+  } else { // Sino
+    int word_index = addr / 8;
+    int offset = word_index % 4; // posición en el bloque (0 a 3)
+    int block_number = word_index / 4;
+    int index = block_number % 8; // set index (0 a 7)
+    int tag = addr >> 8;          // parte alta de la dirección
+
+    // 4. MISS: seleccionar vía menos usada (LFU)
+    int lfu_way = 0;
+    int min_usage = sets[index][0].usage_count;
+    for (int way = 1; way < num_ways; ++way) {
+      if (sets[index][way].usage_count < min_usage) {
+        min_usage = sets[index][way].usage_count;
+        lfu_way = way;
+      }
     }
-  }
 
-  // 4. MISS: seleccionar vía menos usada (LFU)
-  int lfu_way = 0;
-  int min_usage = sets[index][0].usage_count;
-  for (int way = 1; way < num_ways; ++way) {
-    if (sets[index][way].usage_count < min_usage) {
-      min_usage = sets[index][way].usage_count;
-      lfu_way = way;
+    // Linea a cambiar
+    CacheLine old_line = sets[index][lfu_way];
+
+    // Pedirle a Snoop que solicite a Interconnect linea de memoria
+    CacheLine new_line = this->snoop->handleReadMiss(addr);
+    for (int i = 0; i < 4; i++) {
+      std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
+                << std::endl;
     }
+    new_line.tag = tag;
+    new_line.usage_count = 1;
+
+    sets[index][lfu_way] = new_line;
+
+    // Actualizar memoria si tag diferente de -1 y linea valida;
+    int base_index = word_index - offset;
+    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+      for (short i = 0; i < 4; i++) {
+        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+      }
+    }
+
+    return new_line.data[offset];
   }
-
-  // 5. Reemplazar el bloque en la vía seleccionada
-  CacheLine &replacement = sets[index][lfu_way];
-  replacement.tag = tag;
-  replacement.usage_count = 1;
-
-  // 6. Broadcast a interconnect
-
-  // 7. Devolver la palabra solicitada
-  return replacement.data[offset];
 }
 
 void Cache::setData(int addr, double value) {
@@ -54,44 +71,44 @@ void Cache::setData(int addr, double value) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
   }
 
-  // 2. Calcular campos de la dirección
-  int word_index = addr / 8;
-  int offset = word_index % 4; // posición en el bloque (0 a 3)
-  int block_number = word_index / 4;
-  int index = block_number % 8; // set index (0 a 7)
-  int tag = addr >> 8;          // parte alta de la dirección
+  CacheLine line = this->snoop->handleWrite(addr, value);
 
-  // 3. Buscar si el bloque ya está en caché (HIT)
-  for (int way = 0; way < num_ways; ++way) {
-    CacheLine &line = sets[index][way];
-    if (line.tag == tag) {
-      // ‼️ IMPORTANTE hay que revisar que sea valido
-      line.data[offset] = value;
-      line.usage_count++;
-      return;
+  if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
+    int word_index = addr / 8;
+    int offset = word_index % 4; // posición en el bloque (0 a 3)
+    int block_number = word_index / 4;
+    int index = block_number % 8; // set index (0 a 7)
+    int tag = addr >> 8;          // parte alta de la dirección
+
+    // 4. MISS: seleccionar vía menos usada (LFU)
+    int lfu_way = 0;
+    int min_usage = sets[index][0].usage_count;
+    for (int way = 1; way < num_ways; ++way) {
+      if (sets[index][way].usage_count < min_usage) {
+        min_usage = sets[index][way].usage_count;
+        lfu_way = way;
+      }
     }
+
+    // Linea a cambiar
+    CacheLine old_line = sets[index][lfu_way];
+
+    // Actualizar memoria si tag diferente de 1;
+    int base_index = word_index - offset;
+    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+      for (short i = 0; i < 4; i++) {
+        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+      }
+    }
+
+    line.tag = tag;
+    line.usage_count = 1;
+
+    sets[index][lfu_way] = line;
   }
 
-  // 4. MISS: reemplazo LFU
-  int min_usage = sets[index][0].usage_count;
-  int lfu_way = 0;
-
-  for (int way = 1; way < num_ways; ++way) {
-    if (sets[index][way].usage_count < min_usage) {
-      min_usage = sets[index][way].usage_count;
-      lfu_way = way;
-    }
-  }
-
-  // 5. Reemplazar solo lo necesario
-  CacheLine &replacement = sets[index][lfu_way];
-  replacement.tag = tag;            // Cambiar el tag
-  replacement.data[offset] = value; // Escribir solo la palabra modificada
-  replacement.usage_count = 1;      // Reiniciar contador (opcional)
-
-  // 6. Broadcast a interconnect
-
-  // replacement.state = MESIState::MODIFIED;  // Si lo usas en el futuro
+  // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de
+  // la cache
 }
 
 void Cache::printCache() const {
@@ -117,3 +134,27 @@ void Cache::printCache() const {
     }
   }
 }
+
+CacheLine *Cache::getLine(int address) {
+  // 1. Verificar alineación
+  if (address % 8 != 0) {
+    throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
+  }
+
+  // 2. Calcular campos de la dirección
+  int word_index = address / 8;
+  int offset = word_index % 4; // posición en el bloque (0 a 3)
+  int block_number = word_index / 4;
+  int index = block_number % 8; // set index (0 a 7)
+  int tag = address >> 8;       // parte alta de la dirección
+
+  for (int way = 0; way < num_ways; ++way) {
+    CacheLine &line = sets[index][way];
+    if (line.tag == tag) {
+      return &line;
+    }
+  }
+  return nullptr;
+}
+
+void Cache::setSnoop(SnoopModule *snoop) { this->snoop = snoop; }

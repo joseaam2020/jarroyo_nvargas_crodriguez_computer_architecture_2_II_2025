@@ -39,16 +39,10 @@ double Cache::getData(int addr) {
       }
     }
 
+    // Linea a cambiar
     CacheLine old_line = sets[index][lfu_way];
 
-    // Actualizar memoria si tag diferente de -1;
-    int base_index = word_index - offset;
-    if (tag != -1 && old_line.state != mesi_state::INVALID) {
-      for (short i = 0; i < 4; i++) {
-        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
-      }
-    }
-
+    // Pedirle a Snoop que solicite a Interconnect linea de memoria
     CacheLine new_line = this->snoop->handleReadMiss(addr);
     for (int i = 0; i < 4; i++) {
       std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
@@ -58,6 +52,14 @@ double Cache::getData(int addr) {
     new_line.usage_count = 1;
 
     sets[index][lfu_way] = new_line;
+
+    // Actualizar memoria si tag diferente de -1 y linea valida;
+    int base_index = word_index - offset;
+    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+      for (short i = 0; i < 4; i++) {
+        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+      }
+    }
 
     return new_line.data[offset];
   }
@@ -71,7 +73,7 @@ void Cache::setData(int addr, double value) {
 
   CacheLine line = this->snoop->handleWrite(addr, value);
 
-  if (!(line.state == mesi_state::INVALID)) {
+  if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -88,11 +90,12 @@ void Cache::setData(int addr, double value) {
       }
     }
 
+    // Linea a cambiar
     CacheLine old_line = sets[index][lfu_way];
 
     // Actualizar memoria si tag diferente de 1;
     int base_index = word_index - offset;
-    if (tag != -1 && old_line.state != mesi_state::INVALID) {
+    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
       for (short i = 0; i < 4; i++) {
         snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
       }
@@ -103,6 +106,9 @@ void Cache::setData(int addr, double value) {
 
     sets[index][lfu_way] = line;
   }
+
+  // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de
+  // la cache
 }
 
 void Cache::printCache() const {

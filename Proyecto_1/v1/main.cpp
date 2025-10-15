@@ -71,7 +71,29 @@ int main() {
 
   pes[1]->printStatus();
 
-  // memory->printMemory();
+  pes[0]->mov(4, 2);
+  pes[0]->fmul(0, 0, 4);
+  pes[0]->fmul(1, 1, 4);
+  pes[0]->fmul(2, 2, 4);
+  pes[0]->fmul(3, 3, 4);
+
+  pes[0]->printStatus();
+
+  pes[0]->mov(4, 0);
+  pes[0]->mov(5, 8);
+  pes[0]->mov(6, 16);
+  pes[0]->mov(7, 24);
+
+  pes[0]->printStatus();
+
+  pes[0]->store(0, 4);
+  pes[0]->store(1, 5);
+  pes[0]->store(2, 6);
+  pes[0]->store(3, 7);
+
+  pes[0]->printStatus();
+
+  memory->printMemory();
 
   for (auto pe : pes) {
     delete pe;

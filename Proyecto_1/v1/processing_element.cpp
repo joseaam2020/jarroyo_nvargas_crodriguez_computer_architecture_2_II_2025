@@ -14,6 +14,8 @@ void ProcessingElement::load(short reg, short regd) {
   // Dato en cache
   if (isValidRegister(reg) & isValidRegister(regd)) {
     double data = this->cache->getData(this->regs[regd]);
+    std::cout << "Guardando direccion: " << regd << "en registro " << reg
+              << std::endl;
     this->regs[reg] = data;
   }
 }

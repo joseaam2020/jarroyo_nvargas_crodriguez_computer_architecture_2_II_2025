@@ -2,6 +2,7 @@
 #include "cache.h"
 #include "interconnect.h"
 #include "mesi_state.h"
+#include <iostream>
 
 // Implementación del clase
 SnoopModule::SnoopModule(int id, Cache *c, Interconnect *ic)
@@ -131,18 +132,36 @@ CacheLine SnoopModule::handleWrite(int address, double value) {
 
   CacheLine *line = cache->getLine(address);
   CacheLine new_line;
-  if (!line || line->state == mesi_state::INVALID) {
+  if (!line ||
+      line->state == mesi_state::INVALID) { // Si no tengo linea en cache
+    std::cout << "[SNOOP" << pe_id << " ]" << "WRITE MISS";
+
+    // Pido linea a Interconnect
     CacheLine new_line = this->handleReadMiss(address);
     int word_index = address / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
 
+    // Actualizo datos de la cache
     new_line.data[offset] = value;
     new_line.state = mesi_state::MODIFIED;
 
+    // Invalido las lineas de las demas caches
     interconnect->broadcastInvalidate(pe_id, address);
-  } else {
+  } else { // Si tengo la linea en cache
+    std::cout << "[SNOOP" << pe_id << " ]" << "WRITE HIT";
+
+    // Actualizo valores de la linea
+    int word_index = address / 8;
+    int offset = word_index % 4; // posición en el bloque (0 a 3)
+
     line->state = mesi_state::MODIFIED;
+    line->data[offset] = value;
+
+    // Invalido las lineas de las demas caches
     interconnect->broadcastInvalidate(pe_id, address);
+
+    // Devuelvo linea invalida para decirle a la cache que ya se actualizo el
+    // valor
     new_line = CacheLine();
     new_line.state = mesi_state::INVALID;
   }

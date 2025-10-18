@@ -44,10 +44,13 @@ Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe,
     std::cout << "  [BUS] No cache hit, fetching from memory" << std::endl;
     block = memory->read(address);
     // Copiar datos de memoria al resultado
+
     for (int i = 0; i < 4; i++) {
       result.data[i] = block[i];
-      std::cout << "Dato " << i << " Recibido: result = " << result.data[i]
-                << ", block =" << block[i] << std::endl;
+      /*
+    std::cout << "Dato " << i << " Recibido: result = " << result.data[i]
+              << ", block =" << block[i] << std::endl;
+    */
     }
   }
 

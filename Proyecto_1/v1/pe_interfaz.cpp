@@ -280,11 +280,14 @@ int main() {
   pes[0]->store(0, 1);
   pes[0]->load(2, 1);
 
-  Fl_Window *win = new Fl_Window(1000, 800, "🧩 Visor de PEs");
+  Fl_Window *win = new Fl_Window(1000, 800, " Visor de PEs");
   Fl_Tabs *tabs = new Fl_Tabs(10, 10, 980, 700);
 
   // Tab de instrucciones / FileLineSelector
   Fl_Group *grp = new Fl_Group(10, 40, 980, 610, "Instrucciones");
+  grp->color(fl_rgb_color(245, 240, 255));
+
+  grp->box(FL_EMBOSSED_BOX);
   FileLineSelector *inst = new FileLineSelector(20, 50, 940, 540, win);
   grp->end();
 
@@ -294,6 +297,7 @@ int main() {
     sprintf(label, "PE %d", pe);
     char *label_copy = strdup(label);
     Fl_Group *grp = new Fl_Group(10, 40, 980, 610, label_copy);
+    grp->color(fl_rgb_color(240, 245, 255));
 
     // Tabla de registros
     RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
@@ -318,6 +322,16 @@ int main() {
   Fl_Button *btn_load_mem = new Fl_Button(700, 660, 120, 40, "Cargar Memoria");
   btn_load_mem->color(fl_rgb_color(180, 255, 180));
   btn_load_mem->callback(load_memory_cb, mem_tab);
+
+  // Botón step
+  Fl_Button *btn_step = new Fl_Button(800, 10, 50, 30, "Step");
+  btn_step->color(fl_rgb_color(200, 180, 255));
+  // btn_step->callback(step_by_step);
+
+  // Botón BreakPoint
+  Fl_Button *btn_bkp = new Fl_Button(855, 10, 90, 30, "BreakPoint");
+  btn_bkp->color(fl_rgb_color(200, 180, 255));
+  // btn_bkp->callback(step_by_step);
 
   win->end();
   win->show();

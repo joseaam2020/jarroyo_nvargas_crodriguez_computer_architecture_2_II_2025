@@ -122,7 +122,9 @@ void Cache::printCache() const {
 
       std::cout << "  Way " << way << " | Tag: " << std::setw(4) << line.tag
                 << " | Usage: " << std::setw(3) << line.usage_count
+                << " | MesiState: " << mesiStateToString(line.state)
                 << " | Data: [";
+                
 
       for (int i = 0; i < 4; ++i) {
         std::cout << std::fixed << std::setprecision(2) << line.data[i];
@@ -130,6 +132,7 @@ void Cache::printCache() const {
           std::cout << ", ";
       }
 
+      
       std::cout << "]\n";
     }
   }

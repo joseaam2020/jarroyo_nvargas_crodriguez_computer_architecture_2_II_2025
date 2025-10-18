@@ -2,6 +2,7 @@
 #include "processing_element.h"
 #include "snoop.h"
 #include <vector>
+#include <thread>
 #include <iostream>
 
 int main() {
@@ -42,6 +43,54 @@ int main() {
     bus->registerSnoopModule(pe->getSnoop());
     pes.push_back(pe);
   }
+  
+  std::vector<std::thread> threads;
+
+  for (auto pe : pes) {
+    threads.emplace_back([pe]() {
+        // Cada PE hace cosas distintas, se identifica con su ID
+        int id = pe->getPEId(); 
+
+        if (id == 0) {
+            // PE0 ejecuta estas instrucciones (EJEMPLO)
+            pe->mov(0, 0);
+            pe->mov(1, 8);
+            pe->load(0, 0);
+            pe->load(1, 1);
+            pe->fmul(2, 0, 1);
+            pe->store(2, 16);
+            std::cout << "[PE0] terminó su ejecución.\n";
+        } 
+        else if (id == 1) {
+            // PE1 ejecuta otras instrucciones (EJEMPLO)
+            pe->mov(0, 32);
+            pe->mov(1, 40);
+            pe->load(0, 0);
+            pe->load(1, 1);
+            pe->fadd(2, 0, 1);
+            pe->store(2, 48);
+            std::cout << "[PE1] terminó su ejecución.\n";
+        }
+
+        pe->printStatus();
+    }); 
+  }
+
+  // Esperar a que todos los hilos terminen
+  for (auto &t : threads) {
+      t.join();
+  }
+  
+  memory->printMemory(); // No sé si esto va a aquí o en otro lado
+  
+  // Limpieza
+  for (auto pe : pes) {
+    delete pe;
+  }
+  delete bus;
+  delete memory;
+
+  return 0;
 
   std::cout << "\n📋 MEMORIA INICIAL:\n";
   memory->printMemory();
@@ -219,12 +268,4 @@ int main() {
   std::cout << "  • SHARED → MODIFIED (escrituras sobre compartido)\n";
   std::cout << "  • SHARED → INVALID (invalidaciones)\n";
 
-  // Limpieza
-  for (auto pe : pes) {
-    delete pe;
-  }
-  delete bus;
-  delete memory;
-
-  return 0;
 }

@@ -2,7 +2,7 @@
  mov  r1, #2 
  mov  r2, #3
  fmul r3, r1, r2
- stor r3, [r0]
+ store r3, [r0]
  mov  r4, #6
  load r5, [r0]
  fadd r6, r5, r4

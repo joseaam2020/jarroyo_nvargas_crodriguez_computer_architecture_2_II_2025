@@ -81,6 +81,7 @@ void Cache::setData(int addr, double value) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
   }
 
+  CacheLine *verified_line = this->getLine(addr);
   CacheLine line = this->snoop->handleWrite(addr, value);
 
   // printf("ESTADO LINEA: %s", mesiStateToString(line.state));
@@ -106,18 +107,31 @@ void Cache::setData(int addr, double value) {
     // Linea a cambiar
     CacheLine old_line = sets[index][lfu_way];
 
-    // Actualizar memoria si tag diferente de 1;
-    int base_index = word_index - offset;
-    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
-      for (short i = 0; i < 4; i++) {
-        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+    if (verified_line) {
+      if (verified_line->state == mesi_state::INVALID){
+        verified_line->state = line.state;
+        verified_line->usage_count++;
+        for (short i = 0; i < 4; i++) {
+          verified_line->data[i] = line.data[i];
+        }
+      }
+      
+    } else {
+      line.tag = tag;
+      line.usage_count = 1;
+
+      sets[index][lfu_way] = line;
+
+      // Actualizar memoria si tag diferente de -1 y linea valida;
+      int base_index = word_index - offset;
+      if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+        for (short i = 0; i < 4; i++) {
+          snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+        }
       }
     }
 
-    line.tag = tag;
-    line.usage_count = 1;
 
-    sets[index][lfu_way] = line;
   }
 
   // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de

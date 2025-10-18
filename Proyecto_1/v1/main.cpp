@@ -71,12 +71,12 @@ int main() {
           pe->printStatus();
         }
       } else if (id == 1) {
-        pe->mov(0, 32);
+        pe->mov(0, 0);
         pe->mov(1, 40);
         pe->load(0, 0);
         pe->load(1, 1);
         pe->fadd(2, 0, 1);
-        pe->mov(3, 48);
+        pe->mov(3, 24);
         pe->store(2, 3);
 
         // 🔒 Protegemos la salida

@@ -1,5 +1,6 @@
 #include "cache.h"
 #include "mesi_state.h"
+#include <cstdio>
 #include <iostream>
 #include <ostream>
 
@@ -23,6 +24,7 @@ double Cache::getData(int addr) {
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     return line->data[offset];
   } else { // Sino
+    std::cout << "HAGO LO QUE ME DA LA GANA" << std::endl;
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -48,19 +50,27 @@ double Cache::getData(int addr) {
       std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
                 << std::endl;
     }
-    new_line.tag = tag;
-    new_line.usage_count = 1;
 
-    sets[index][lfu_way] = new_line;
-
-    // Actualizar memoria si tag diferente de -1 y linea valida;
-    int base_index = word_index - offset;
-    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+    if (line) {
+      line->state = new_line.state;
+      line->usage_count++;
       for (short i = 0; i < 4; i++) {
-        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+        line->data[i] = new_line.data[i];
+      }
+    } else {
+      new_line.tag = tag;
+      new_line.usage_count = 1;
+
+      sets[index][lfu_way] = new_line;
+
+      // Actualizar memoria si tag diferente de -1 y linea valida;
+      int base_index = word_index - offset;
+      if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+        for (short i = 0; i < 4; i++) {
+          snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+        }
       }
     }
-
     return new_line.data[offset];
   }
 }
@@ -73,7 +83,10 @@ void Cache::setData(int addr, double value) {
 
   CacheLine line = this->snoop->handleWrite(addr, value);
 
+  printf("ESTADO LINEA: %s", mesiStateToString(line.state));
+
   if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
+
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -122,6 +135,7 @@ void Cache::printCache() const {
 
       std::cout << "  Way " << way << " | Tag: " << std::setw(4) << line.tag
                 << " | Usage: " << std::setw(3) << line.usage_count
+                << " | MesiState: " << mesiStateToString(line.state)
                 << " | Data: [";
 
       for (int i = 0; i < 4; ++i) {

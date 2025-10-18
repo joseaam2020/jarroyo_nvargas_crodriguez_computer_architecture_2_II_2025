@@ -26,6 +26,7 @@ int main() {
     std::cout << "╚══════════════════════════════════════════════════════════╝\n";
     std::cout << std::endl;
 
+    // ===================== Inicialización del sistema =====================
     Memory* memory = new Memory();
     memory->initialize(100, 50);
     memory->initialize(200, 75);
@@ -47,46 +48,70 @@ int main() {
     std::cout << "  Address 300: 100" << std::endl;
     std::cout << "  Address 400: 125" << std::endl;
 
+    // ===================== Inicio de la simulación =====================
     std::cout << "\n\n";
     std::cout << "╔══════════════════════════════════════════════════════════╗\n";
-    std::cout << "║                    SIMULATION START                      ║\n";
+    std::cout << "║            SIMULATION: VECTOR MULTIPLICATION             ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════╝\n";
 
-    std::cout << "\n--- Test 1: PE0 reads address 100 (should be EXCLUSIVE) ---";
-    pes[0]->read(100);
+    // ===================================================================
+    // Simulación del código ensamblador:
+    // load r4, [r2]
+    // loop:
+    //   load r5, [r0]
+    //   load r6, [r1]
+    //   fmul r7, r5, r6
+    //   fadd r4, r4, r7
+    //   inc r0, inc r1, dec r3
+    //   jnz loop
+    // stor r4, [r2]
+    // halt
+    // ===================================================================
 
-    std::cout << "\n--- Test 2: PE1 reads address 100 (should be SHARED) ---";
-    pes[1]->read(100);
+    ProcessingElement* pe_exec = pes[0]; // ejecuta el programa PE0
 
-    std::cout << "\n--- Test 3: PE2 reads address 100 (should be SHARED) ---";
-    pes[2]->read(100);
+    int A_base = 100;
+    int B_base = 200;
+    int partial_sum_addr = 300;
+    int count = 4;  // elementos a procesar
+    int r4 = 0;     // acumulador local
+    int r5, r6, r7;
 
-    std::cout << "\n--- Test 4: PE0 writes to address 100 (SHARED->MODIFIED, invalidate others) ---";
-    pes[0]->write(100, 999);
+    std::cout << "\n[Instrucción] load r4, [r2]   ; r4 = partial_sum inicial (acumulador local)";
+    pe_exec->read(partial_sum_addr);
+    r4 = memory->read(partial_sum_addr);
 
-    std::cout << "\n--- Test 5: PE1 reads address 100 (PE0 flushes, both become SHARED) ---";
-    pes[1]->read(100);
+    while (count > 0) {
+        std::cout << "\n[Instrucción] load r5, [r0]   ; r5 = A[i]";
+        pe_exec->read(A_base);
+        r5 = memory->read(A_base);
 
-    std::cout << "\n--- Test 6: PE3 writes to address 200 (INVALID->MODIFIED) ---";
-    pes[3]->write(200, 888);
+        std::cout << "\n[Instrucción] load r6, [r1]   ; r6 = B[i]";
+        pe_exec->read(B_base);
+        r6 = memory->read(B_base);
 
-    std::cout << "\n--- Test 7: PE0 reads address 300 (should be EXCLUSIVE) ---";
-    pes[0]->read(300);
+        std::cout << "\n[Instrucción] fmul r7, r5, r6 ; r7 = A[i] * B[i]";
+        r7 = r5 * r6;
 
-    std::cout << "\n--- Test 8: PE0 writes to address 300 (EXCLUSIVE->MODIFIED) ---";
-    pes[0]->write(300, 777);
+        std::cout << "\n[Instrucción] fadd r4, r4, r7 ; r4 += r7";
+        r4 += r7;
 
-    std::cout << "\n--- Test 9: PE2 reads address 300 (PE0 flushes MODIFIED data) ---";
-    pes[2]->read(300);
+        std::cout << "\n[Instrucción] inc r0, inc r1, dec r3 ; avanzar posiciones";
+        A_base += 1;
+        B_base += 1;
+        count -= 1;
+    }
 
-    std::cout << "\n--- Test 10: Multiple PEs read address 400 ---";
-    pes[0]->read(400);
-    pes[1]->read(400);
-    pes[2]->read(400);
-    pes[3]->read(400);
+    std::cout << "\n[Instrucción] stor r4, [r2]   ; guarda partial_sum actualizado";
+    pe_exec->write(partial_sum_addr, r4);
 
+    std::cout << "\n[Instrucción] halt";
+    std::cout << "\nPrograma finalizado.\n";
+
+    // Mostrar estado del sistema MESI tras ejecutar las instrucciones
     printSystemState(pes, memory);
 
+    // ===================== Fin de la simulación =====================
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════════════════════╗\n";
     std::cout << "║                    SIMULATION END                        ║\n";

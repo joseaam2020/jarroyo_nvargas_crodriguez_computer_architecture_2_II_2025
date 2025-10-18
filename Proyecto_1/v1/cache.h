@@ -17,7 +17,7 @@ struct CacheLine {
   double data[4] = {}; // Cada línea almacena 4 palabras (32 bytes)
   int usage_count = 0;
 
-  mesi_state state; // Preparado para coherencia
+  mesi_state state = mesi_state::INVALID; // Preparado para coherencia
 
   CacheLine() = default;
   CacheLine(int tag) : tag(tag), usage_count(1) {}

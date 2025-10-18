@@ -24,7 +24,6 @@ double Cache::getData(int addr) {
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     return line->data[offset];
   } else { // Sino
-    std::cout << "HAGO LO QUE ME DA LA GANA" << std::endl;
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -46,10 +45,11 @@ double Cache::getData(int addr) {
 
     // Pedirle a Snoop que solicite a Interconnect linea de memoria
     CacheLine new_line = this->snoop->handleReadMiss(addr);
+    /*
     for (int i = 0; i < 4; i++) {
       std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
                 << std::endl;
-    }
+    }*/
 
     if (line) {
       line->state = new_line.state;
@@ -84,7 +84,7 @@ void Cache::setData(int addr, double value) {
   CacheLine *verified_line = this->getLine(addr);
   CacheLine line = this->snoop->handleWrite(addr, value);
 
-  printf("ESTADO LINEA: %s", mesiStateToString(line.state));
+  // printf("ESTADO LINEA: %s", mesiStateToString(line.state));
 
   if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
 

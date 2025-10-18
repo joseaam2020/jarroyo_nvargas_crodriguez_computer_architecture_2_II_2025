@@ -2,7 +2,6 @@
 #include "interconnect.h"
 #include "snoop.h"
 
-
 ProcessingElement::ProcessingElement(int id, Interconnect *bus) : pe_id(id) {
   this->cache = new Cache(id);
   this->snoop = new SnoopModule(id, this->cache, bus);
@@ -15,8 +14,6 @@ void ProcessingElement::load(short reg, short regd) {
   // Dato en cache
   if (isValidRegister(reg) & isValidRegister(regd)) {
     double data = this->cache->getData(this->regs[regd]);
-    std::cout << "Guardando direccion: " << regd << "en registro " << reg
-              << std::endl;
     this->regs[reg] = data;
   }
 }
@@ -67,19 +64,19 @@ void ProcessingElement::mov(short reg, double value) {
   }
 }
 
-void ProcessingElement::execute(std::string op){
+void ProcessingElement::execute(std::string op) {
 
   // Lista para guardar los tokens
   std::vector<std::string> token_list;
 
   // Descomponer la instrucción en tokens
   std::istringstream ss(op);
-  std::string temp_token; // Guarda cada token temporalemte 
-  
-  while(ss >> temp_token){
+  std::string temp_token; // Guarda cada token temporalemte
+
+  while (ss >> temp_token) {
 
     // Quitar las comas
-    if (!temp_token.empty() && temp_token.back() == ','){
+    if (!temp_token.empty() && temp_token.back() == ',') {
       temp_token.pop_back();
     }
 
@@ -88,112 +85,114 @@ void ProcessingElement::execute(std::string op){
   }
 
   // Identificar la operación
-    if (!token_list.empty()){
+  if (!token_list.empty()) {
 
-      // Obtener el primer token
-      std::string command = token_list[0];
+    // Obtener el primer token
+    std::string command = token_list[0];
 
-      if (command == "load"){
-        //load r5, [r0]
-        std::string dest_reg = token_list[1]; // Obtiene r#
-        std::string dest_regd = token_list[2]; // Obtiene [r#]
+    if (command == "load") {
+      // load r5, [r0]
+      std::string dest_reg = token_list[1];  // Obtiene r#
+      std::string dest_regd = token_list[2]; // Obtiene [r#]
 
-        // Obtener el número en r#
-        short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+      // Obtener el número en r#
+      short reg = std::stoi(dest_reg.substr(1)); // r# -> #
 
-        // Obtener número de [r#]
-        if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-          std::string addr_regd = dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-          short regd = std::stoi(dest_regd.substr(1)); // r# -> #
+      // Obtener número de [r#]
+      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
+        std::string addr_regd =
+            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
+        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
 
-          this->load(reg, regd);
-        }
-      }
-
-      if (command == "store"){
-        //store r3, [r0]
-        std::string dest_reg = token_list[1]; // Obtiene r#
-        std::string dest_regd = token_list[2]; // Obtiene [r#]
-
-        // Obtener el número en r#
-        short reg = std::stoi(dest_reg.substr(1)); // r# -> #
-
-        // Obtener número de [r#]
-        if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-          std::string addr_regd = dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-          short regd = std::stoi(dest_regd.substr(1)); // r# -> #
-
-          this->store(reg, regd);
-        }
-      }
-
-      if (command == "fmul"){
-        //fmul r3, r1, r2
-        std::string dest_regd = token_list[1]; // Obtiene r#
-        std::string dest_ra = token_list[2]; // Obtiene r#
-        std::string dest_rb = token_list[3]; // Obtiene r#
-
-        // Obtener el número en r#
-        short regd = std::stoi(dest_regd.substr(1)); // r# -> #
-        short ra = std::stoi(dest_ra.substr(1)); // r# -> #
-        short rb = std::stoi(dest_rb.substr(1)); // r# -> #
-
-        this->fmul(regd, ra, rb);        
-      }
-
-      if (command == "fadd"){
-        //fadd r6, r5, r4
-        std::string dest_regd = token_list[1]; // Obtiene r#
-        std::string dest_ra = token_list[2]; // Obtiene r#
-        std::string dest_rb = token_list[3]; // Obtiene r#
-
-        // Obtener el número en r#
-        short regd = std::stoi(dest_regd.substr(1)); // r# -> #
-        short ra = std::stoi(dest_ra.substr(1)); // r# -> #
-        short rb = std::stoi(dest_rb.substr(1)); // r# -> #
-
-        this->fadd(regd, ra, rb);
-      }
-
-      if (command == "inc"){
-        //inc r1
-        std::string dest_reg = token_list[1]; // Obtiene r#
-
-        // Obtener el número en r#
-        short reg = std::stoi(dest_reg.substr(1)); // r# -> #
-
-        this-> inc(reg);
-      }
-
-      if (command == "dec"){
-        //dec r5
-        std::string dest_reg = token_list[1]; // Obtiene r#
-
-        // Obtener el número en r#
-        short reg = std::stoi(dest_reg.substr(1)); // r# -> #
-
-        this-> dec(reg);
-      }
-
-      if (command == "jnz"){
-        //jnz loop
-        std::string label = token_list[1]; // Obtiene label
-
-        this-> jnz(label);
-      }
-
-      if (command == "mov"){
-        //mov  r2, #3
-        std::string dest_reg = token_list[1]; // Obtiene r#
-        std::string dest_value = token_list[2]; // Obtiene #num
-
-        // Obtener el número en r#
-        short reg = std::stoi(dest_reg.substr(1)); // r# -> #
-        short value = std::stoi(dest_value.substr(1)); // #num -> num
-
-        this->mov(reg, value);
+        this->load(reg, regd);
       }
     }
+
+    if (command == "store") {
+      // store r3, [r0]
+      std::string dest_reg = token_list[1];  // Obtiene r#
+      std::string dest_regd = token_list[2]; // Obtiene [r#]
+
+      // Obtener el número en r#
+      short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+
+      // Obtener número de [r#]
+      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
+        std::string addr_regd =
+            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
+        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
+
+        this->store(reg, regd);
+      }
+    }
+
+    if (command == "fmul") {
+      // fmul r3, r1, r2
+      std::string dest_regd = token_list[1]; // Obtiene r#
+      std::string dest_ra = token_list[2];   // Obtiene r#
+      std::string dest_rb = token_list[3];   // Obtiene r#
+
+      // Obtener el número en r#
+      short regd = std::stoi(dest_regd.substr(1)); // r# -> #
+      short ra = std::stoi(dest_ra.substr(1));     // r# -> #
+      short rb = std::stoi(dest_rb.substr(1));     // r# -> #
+
+      this->fmul(regd, ra, rb);
+    }
+
+    if (command == "fadd") {
+      // fadd r6, r5, r4
+      std::string dest_regd = token_list[1]; // Obtiene r#
+      std::string dest_ra = token_list[2];   // Obtiene r#
+      std::string dest_rb = token_list[3];   // Obtiene r#
+
+      // Obtener el número en r#
+      short regd = std::stoi(dest_regd.substr(1)); // r# -> #
+      short ra = std::stoi(dest_ra.substr(1));     // r# -> #
+      short rb = std::stoi(dest_rb.substr(1));     // r# -> #
+
+      this->fadd(regd, ra, rb);
+    }
+
+    if (command == "inc") {
+      // inc r1
+      std::string dest_reg = token_list[1]; // Obtiene r#
+
+      // Obtener el número en r#
+      short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+
+      this->inc(reg);
+    }
+
+    if (command == "dec") {
+      // dec r5
+      std::string dest_reg = token_list[1]; // Obtiene r#
+
+      // Obtener el número en r#
+      short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+
+      this->dec(reg);
+    }
+
+    if (command == "jnz") {
+      // jnz loop
+      std::string label = token_list[1]; // Obtiene label
+
+      this->jnz(label);
+    }
+
+    if (command == "mov") {
+      // mov  r2, #3
+      std::string dest_reg = token_list[1];   // Obtiene r#
+      std::string dest_value = token_list[2]; // Obtiene #num
+
+      // Obtener el número en r#
+      short reg = std::stoi(dest_reg.substr(1));     // r# -> #
+      short value = std::stoi(dest_value.substr(1)); // #num -> num
+
+      this->mov(reg, value);
+    }
+  }
 }
 
 void ProcessingElement::printStatus() const {

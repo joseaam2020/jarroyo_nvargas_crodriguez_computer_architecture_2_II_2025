@@ -60,7 +60,7 @@ Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe, int addre
 
 // Notifico a las snoops en ponerse en invalidate
 void Interconnect::broadcastInvalidate(int requesting_pe, int address) {
-  std::unique_lock<std::mutex> lock(bus_mutex); // Esperar turno del bus
+  //std::unique_lock<std::mutex> lock(bus_mutex); // Esperar turno del bus
   std::cout << "\n[BUS] PE" << requesting_pe
             << " broadcasts INVALIDATE for address " << address << std::endl;
 

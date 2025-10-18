@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iomanip> // Para formatear decimales
 #include <iostream>
+#include <string>
 #define NUMERO_REGISTROS 8
 
 class ProcessingElement {
@@ -27,8 +28,9 @@ public:
   void fadd(short regd, short ra, short rb);
   void inc(short reg);
   void dec(short reg);
-  void jnz(char *label);
+  void jnz(std::string label);
   void mov(short reg, double value);
+  void execute(std::string op);
 
   int getPEId() const { return pe_id; }
   SnoopModule *getSnoop() { return snoop; }

@@ -243,11 +243,13 @@ int main() {
                 for(int d=0; d<DATA_PER_CACHE; d++) PE_cache[pe][s][w].data[d] = 0.0;
             }
 
-    Fl_Window* win = new Fl_Window(1000,800,"🧩 Visor de PEs");
+    Fl_Window* win = new Fl_Window(1000,800," Visor de PEs");
     Fl_Tabs* tabs = new Fl_Tabs(10,10,980,700);
 
     // Tab de instrucciones
     Fl_Group* grp_inst = new Fl_Group(10,40,980,610,"Instrucciones");
+    grp_inst->color(fl_rgb_color(245, 240, 255));  
+    grp_inst->box(FL_EMBOSSED_BOX);    
     FileLineSelector* inst = new FileLineSelector(20,50,940,540,win);
     grp_inst->end();
 
@@ -255,10 +257,11 @@ int main() {
     for(int pe=0; pe<NUM_PE; pe++){
         char label[20]; sprintf(label,"PE %d",pe);
         char* label_copy = strdup(label);
-        Fl_Group* grp = new Fl_Group(10,40,980,610,label_copy);
-
-        RegTable* reg_tab = new RegTable(20,50,300,400,pe);
-        CacheTable* cache_tab = new CacheTable(300,50,700,600,pe);
+       Fl_Group* grp = new Fl_Group(10,40,980,610,label_copy);
+      grp->color(fl_rgb_color(240, 245, 255));  
+      
+      RegTable* reg_tab = new RegTable(20,50,300,400,pe);
+      CacheTable* cache_tab = new CacheTable(300,50,700,600,pe);
 
         grp->end();
     }
@@ -276,10 +279,20 @@ int main() {
     btn_close->callback(on_close);
 
     // Botón cargar memoria
-    Fl_Button* btn_load_mem = new Fl_Button(700,660,120,40,"Cargar Memoria");
-    btn_load_mem->color(fl_rgb_color(180,255,180));
+    Fl_Button* btn_load_mem = new Fl_Button(700,660,130,40,"Cargar Memoria");
+    btn_load_mem->color(fl_rgb_color(180,200,255));
     btn_load_mem->callback(load_memory_cb, mem_tab);
 
+
+    // Botón step
+    Fl_Button* btn_step = new Fl_Button(800,10,50,30,"Step");
+    btn_step->color(fl_rgb_color(200,180,255));
+    //btn_step->callback(step_by_step);
+
+    // Botón BreakPoint
+    Fl_Button* btn_bkp = new Fl_Button(855,10,90,30,"BreakPoint");
+    btn_bkp->color(fl_rgb_color(200,180,255));
+    //btn_bkp->callback(step_by_step);
 
 
     win->end();

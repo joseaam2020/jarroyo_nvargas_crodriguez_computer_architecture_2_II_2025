@@ -124,48 +124,43 @@ CacheLine SnoopModule::handleWrite(int address, double value) {
   if (!interconnect) {
     std::cerr << "[SNOOP " << pe_id
               << "] ERROR: No hay interconnect configurado" << std::endl;
-    return false;
+    return CacheLine();
   }
 
   std::cout << "\n[SNOOP " << pe_id << "] Manejando WRITE para addr 0x"
             << std::hex << address << std::dec << std::endl;
 
   CacheLine *line = cache->getLine(address);
-  CacheLine new_line;
-  if (!line ||
-      line->state == mesi_state::INVALID) { // Si no tengo linea en cache
-    std::cout << "[SNOOP" << pe_id << " ]" << "WRITE MISS";
+  CacheLine result;
 
-    // Pido linea a Interconnect
-    CacheLine new_line = this->handleReadMiss(address);
+  if (!line || line->state == mesi_state::INVALID) {
+    std::cout << "[SNOOP " << pe_id << "] WRITE MISS" << std::endl;
+
+    // Pido la línea al interconnect
+    result = this->handleReadMiss(address);
+
     int word_index = address / 8;
-    int offset = word_index % 4; // posición en el bloque (0 a 3)
+    int offset = word_index % 4;
 
-    // Actualizo datos de la cache
-    new_line.data[offset] = value;
-    new_line.state = mesi_state::MODIFIED;
+    result.data[offset] = value;
+    result.state = mesi_state::MODIFIED;
 
-    // Invalido las lineas de las demas caches
     interconnect->broadcastInvalidate(pe_id, address);
-  } else { // Si tengo la linea en cache
-    std::cout << "[SNOOP" << pe_id << " ]" << "WRITE HIT";
+  } else {
+    std::cout << "[SNOOP " << pe_id << "] WRITE HIT" << std::endl;
 
-    // Actualizo valores de la linea
     int word_index = address / 8;
-    int offset = word_index % 4; // posición en el bloque (0 a 3)
+    int offset = word_index % 4;
 
-    line->state = mesi_state::MODIFIED;
     line->data[offset] = value;
+    line->state = mesi_state::MODIFIED;
 
-    // Invalido las lineas de las demas caches
     interconnect->broadcastInvalidate(pe_id, address);
 
-    // Devuelvo linea invalida para decirle a la cache que ya se actualizo el
-    // valor
-    new_line = CacheLine();
-    new_line.state = mesi_state::INVALID;
+    result.state = mesi_state::INVALID; // Solo indica que ya se actualizó
   }
-  return new_line;
+
+  return result;
 }
 
 void SnoopModule::writeToMem(int address, double value) {

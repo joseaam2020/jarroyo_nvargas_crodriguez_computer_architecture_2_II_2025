@@ -4,12 +4,16 @@
 #include "processing_element.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
+#include <FL/Fl_File_Chooser.H>
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_draw.H>
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -21,22 +25,19 @@
 #define BLOCKS 128
 #define ADDRS_PER_BLOCK 4
 
-float memory[BLOCKS][ADDRS_PER_BLOCK] = {
-    {15.00, 13.90, 41.30, 100.80}, {30.00, 27.80, 82.60, 201.60},
-    // el resto quedará en 0.00 automáticamente
-};
-
-// =========================================================
+// ==========================================
 // Table para Memoria
-// =========================================================
+// ==========================================
 class MemoryTable : public Fl_Table {
+  std::vector<std::vector<double>> memory_data;
+
 public:
   MemoryTable(int X, int Y, int W, int H, const char *L = 0)
       : Fl_Table(X, Y, W, H, L) {
     rows(BLOCKS);
-    cols(ADDRS_PER_BLOCK + 1); // +1 para el nombre del bloque
-    row_height_all(30); // Altura de cada fila (ajústalo a lo que quieras)
-    col_width_all(100); // Ancho de cada columna (puedes variarlo)
+    cols(ADDRS_PER_BLOCK + 1);
+    row_height_all(30);
+    col_width_all(100);
     col_header(1);
     row_header(1);
     col_resize(1);
@@ -44,47 +45,29 @@ public:
     end();
   }
 
-private:
+  void set_memory(const std::vector<std::vector<double>> &mem) {
+    memory_data = mem;
+    redraw();
+  }
+
+protected:
   void draw_cell(TableContext context, int R, int C, int X, int Y, int W,
                  int H) override {
-    // tu código aquí
-    static char s[40];
+    char s[40];
     switch (context) {
-    case CONTEXT_STARTPAGE:
-      fl_font(FL_COURIER, 18);
-      break;
-    case CONTEXT_COL_HEADER:
-      fl_push_clip(X, Y, W, H);
-      fl_draw_box(FL_FLAT_BOX, X, Y, W, H, fl_rgb_color(210, 210, 210));
-      fl_color(FL_BLACK);
-      if (C == 0)
-        snprintf(s, sizeof(s), "Block");
-      else
-        snprintf(s, sizeof(s), "Addr[%d]", (R * ADDRS_PER_BLOCK) + (C - 1));
-      fl_draw(s, X, Y, W, H, FL_ALIGN_CENTER);
-      fl_pop_clip();
-      break;
-    case CONTEXT_ROW_HEADER:
-      fl_push_clip(X, Y, W, H);
-      fl_draw_box(FL_FLAT_BOX, X, Y, W, H, fl_rgb_color(230, 230, 230));
-      fl_color(FL_BLACK);
-      snprintf(s, sizeof(s), "%d", R);
-      fl_draw(s, X, Y, W, H, FL_ALIGN_CENTER);
-      fl_pop_clip();
-      break;
     case CONTEXT_CELL:
       fl_push_clip(X, Y, W, H);
-      fl_color(fl_rgb_color(250, 250, 250));
+      fl_color(FL_WHITE);
       fl_rectf(X, Y, W, H);
-      fl_color(FL_GRAY);
-      fl_rect(X, Y, W, H);
       fl_color(FL_BLACK);
-
+      fl_rect(X, Y, W, H);
       if (C == 0)
-        snprintf(s, sizeof(s), "Block %d", R);
+        snprintf(s, sizeof(s), "Bloque %d", R);
+      else if (R < static_cast<int>(memory_data.size()) &&
+               C - 1 < static_cast<int>(memory_data[R].size()))
+        snprintf(s, sizeof(s), "%.2f", memory_data[R][C - 1]);
       else
-        snprintf(s, sizeof(s), "%.2f", memory[R][C - 1]);
-
+        snprintf(s, sizeof(s), "0.00");
       fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
       fl_pop_clip();
       break;
@@ -95,7 +78,7 @@ private:
 };
 
 // ==========================================
-// Tabla para Registros
+// Table para Registros
 // ==========================================
 class RegTable : public Fl_Table {
   ProcessingElement *pe;
@@ -143,7 +126,7 @@ private:
 };
 
 // ==========================================
-// Tabla para Cache
+// Table para Cache
 // ==========================================
 class CacheTable : public Fl_Table {
   ProcessingElement *pe;
@@ -226,10 +209,58 @@ private:
 };
 
 // ==========================================
-// Main
+// Callbacks
 // ==========================================
 void on_close(Fl_Widget *, void *) { exit(0); }
 
+void load_memory_cb(Fl_Widget *w, void *data) {
+  MemoryTable *mem_tab = static_cast<MemoryTable *>(data);
+
+  const char *filename =
+      fl_file_chooser("Seleccionar archivo de memoria", "*.txt", nullptr);
+  if (!filename)
+    return;
+
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    std::cerr << "No se pudo abrir el archivo de memoria.\n";
+    return;
+  }
+
+  std::vector<std::vector<double>> mem_data;
+  std::string line;
+  while (std::getline(file, line)) {
+    std::vector<double> row;
+    size_t pos = 0;
+    while (pos < line.size()) {
+      double val;
+      int n = 0;
+      if (sscanf(line.c_str() + pos, "%lf%n", &val, &n) == 1) {
+        row.push_back(val);
+        pos += n;
+      } else
+        break;
+    }
+    mem_data.push_back(row);
+  }
+
+  file.close();
+  mem_tab->set_memory(mem_data);
+  std::cout << "Memoria cargada: " << filename << std::endl;
+}
+
+// NUEVO CALLBACK para cargar instrucciones
+void load_instructions_cb(Fl_Widget *w, void *data) {
+  FileLineSelector *inst_selector = static_cast<FileLineSelector *>(data);
+  inst_selector->load_instructions_file();
+
+  // Mostrar confirmación
+  std::cout << "Instrucciones cargadas exitosamente!" << std::endl;
+}
+
+// ==========================================
+// Main
+// ==========================================
 int main() {
 
   // Inicializar memoria
@@ -257,29 +288,36 @@ int main() {
   FileLineSelector *inst = new FileLineSelector(20, 50, 940, 540, win);
   grp->end();
 
+  // Tabs para PEs
   for (int pe = 0; pe < NUM_PE; pe++) {
     char label[20];
     sprintf(label, "PE %d", pe);
-    char *label_copy = strdup(label); // Copia dinámica de la cadena
+    char *label_copy = strdup(label);
     Fl_Group *grp = new Fl_Group(10, 40, 980, 610, label_copy);
 
     // Tabla de registros
     RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
-    std::cout << "AQUI!" << std::endl;
     // Tabla de cache
     CacheTable *cache_tab = new CacheTable(300, 50, 700, 600, pes[pe]);
     grp->end();
   }
 
-  grp = new Fl_Group(10, 40, 980, 610, "Memoria");
+  // Tab de memoria
+  Fl_Group *grp_mem = new Fl_Group(10, 40, 980, 610, "Memoria");
   MemoryTable *mem_tab = new MemoryTable(20, 50, 810, 600);
-  grp->end();
+  grp_mem->end();
 
   tabs->end();
 
+  // Botón cerrar
   Fl_Button *btn_close = new Fl_Button(850, 660, 120, 40, "Cerrar");
   btn_close->color(fl_rgb_color(255, 180, 180));
   btn_close->callback(on_close);
+
+  // Botón cargar memoria
+  Fl_Button *btn_load_mem = new Fl_Button(700, 660, 120, 40, "Cargar Memoria");
+  btn_load_mem->color(fl_rgb_color(180, 255, 180));
+  btn_load_mem->callback(load_memory_cb, mem_tab);
 
   win->end();
   win->show();

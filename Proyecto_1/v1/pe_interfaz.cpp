@@ -1,4 +1,7 @@
 #include "file_line_selector.h"
+#include "interconnect.h"
+#include "mem.h"
+#include "processing_element.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Group.H>
@@ -19,27 +22,9 @@
 #define ADDRS_PER_BLOCK 4
 
 float memory[BLOCKS][ADDRS_PER_BLOCK] = {
-    {15.00, 13.90, 41.30, 100.80},
-    {30.00, 27.80, 82.60, 201.60},
+    {15.00, 13.90, 41.30, 100.80}, {30.00, 27.80, 82.60, 201.60},
     // el resto quedará en 0.00 automáticamente
 };
-
-// ==========================================
-// Datos de ejemplo para PE0 (puedes rellenar para otros PEs)
-// ==========================================
-float PE_regs[NUM_PE][NUM_REG] = {
-    {30.0, 27.8, 82.6, 201.6, 0.0, 8.0, 16.0, 24.0},
-    {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0},
-    {10, 20, 30, 40, 50, 60, 70, 80},
-    {0, 0, 0, 0, 0, 0, 0, 0}};
-
-struct CacheLine {
-  int tag;
-  int usage;
-  float data[DATA_PER_CACHE];
-};
-
-CacheLine PE_cache[NUM_PE][CACHE_SETS][CACHE_WAYS];
 
 // =========================================================
 // Table para Memoria
@@ -113,11 +98,11 @@ private:
 // Tabla para Registros
 // ==========================================
 class RegTable : public Fl_Table {
-  int pe_index;
+  ProcessingElement *pe;
 
 public:
-  RegTable(int X, int Y, int W, int H, int pe)
-      : Fl_Table(X, Y, W, H), pe_index(pe) {
+  RegTable(int X, int Y, int W, int H, ProcessingElement *pe)
+      : Fl_Table(X, Y, W, H), pe(pe) {
     rows(NUM_REG);
     cols(2);
     row_header(0);
@@ -146,7 +131,7 @@ private:
       if (C == 0)
         snprintf(s, sizeof(s), "R%d", R);
       else
-        snprintf(s, sizeof(s), "%.4f", PE_regs[pe_index][R]);
+        snprintf(s, sizeof(s), "%.4f", pe->getRegisters()[R]);
       fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
       fl_rect(X, Y, W, H);
       fl_pop_clip();
@@ -161,11 +146,11 @@ private:
 // Tabla para Cache
 // ==========================================
 class CacheTable : public Fl_Table {
-  int pe_index;
+  ProcessingElement *pe;
 
 public:
-  CacheTable(int X, int Y, int W, int H, int pe)
-      : Fl_Table(X, Y, W, H), pe_index(pe) {
+  CacheTable(int X, int Y, int W, int H, ProcessingElement *pe)
+      : Fl_Table(X, Y, W, H), pe(pe) {
     rows(CACHE_SETS * CACHE_WAYS);
     cols(4 +
          DATA_PER_CACHE); // Set, Way, Tag, Usage, Data0, Data1, Data2, Data3
@@ -181,7 +166,7 @@ private:
     char s[40];
     int set = R / CACHE_WAYS;
     int way = R % CACHE_WAYS;
-    CacheLine &line = PE_cache[pe_index][set][way];
+    const CacheLine &line = pe->getCache()->getSets()[set][way];
 
     switch (context) {
     case CONTEXT_COL_HEADER:
@@ -224,7 +209,7 @@ private:
         snprintf(s, sizeof(s), "%d", line.tag);
         break;
       case 3:
-        snprintf(s, sizeof(s), "%d", line.usage);
+        snprintf(s, sizeof(s), "%d", line.usage_count);
         break;
       default:
         snprintf(s, sizeof(s), "%.2f", line.data[C - 4]);
@@ -246,25 +231,30 @@ private:
 void on_close(Fl_Widget *, void *) { exit(0); }
 
 int main() {
-  // Inicializar cache de ejemplo
-  for (int pe = 0; pe < NUM_PE; pe++)
-    for (int s = 0; s < CACHE_SETS; s++)
-      for (int w = 0; w < CACHE_WAYS; w++) {
-        PE_cache[pe][s][w].tag = (s == 0 && w == 0) ? 0 : -1;
-        PE_cache[pe][s][w].usage = (s == 0 && w == 0) ? 1 : 0;
-        for (int d = 0; d < DATA_PER_CACHE; d++)
-          PE_cache[pe][s][w].data[d] =
-              (s == 0 && w == 0) ? PE_regs[pe][d] : 0.0;
-      }
+
+  // Inicializar memoria
+  Memory *memory = new Memory();
+
+  Interconnect *bus = new Interconnect(memory);
+
+  std::vector<ProcessingElement *> pes;
+  for (int i = 0; i < NUM_PE; i++) {
+    ProcessingElement *pe = new ProcessingElement(i, bus);
+    bus->registerSnoopModule(pe->getSnoop());
+    pes.push_back(pe);
+  }
+
+  pes[0]->mov(0, 45.5);
+  pes[0]->mov(1, 8);
+  pes[0]->store(0, 1);
+  pes[0]->load(2, 1);
 
   Fl_Window *win = new Fl_Window(1000, 800, "🧩 Visor de PEs");
   Fl_Tabs *tabs = new Fl_Tabs(10, 10, 980, 700);
 
   // Tab de instrucciones / FileLineSelector
-  Fl_Group *grp =
-      new Fl_Group(10, 40, 980, 610, "Instrucciones"); // ✅ nombre diferente
-  FileLineSelector *inst =
-      new FileLineSelector(20, 50, 940, 540, win); // ✅ pasa 'grp' como parent
+  Fl_Group *grp = new Fl_Group(10, 40, 980, 610, "Instrucciones");
+  FileLineSelector *inst = new FileLineSelector(20, 50, 940, 540, win);
   grp->end();
 
   for (int pe = 0; pe < NUM_PE; pe++) {
@@ -274,9 +264,10 @@ int main() {
     Fl_Group *grp = new Fl_Group(10, 40, 980, 610, label_copy);
 
     // Tabla de registros
-    RegTable *reg_tab = new RegTable(20, 50, 300, 400, pe);
+    RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
+    std::cout << "AQUI!" << std::endl;
     // Tabla de cache
-    CacheTable *cache_tab = new CacheTable(300, 50, 700, 600, pe);
+    CacheTable *cache_tab = new CacheTable(300, 50, 700, 600, pes[pe]);
     grp->end();
   }
 

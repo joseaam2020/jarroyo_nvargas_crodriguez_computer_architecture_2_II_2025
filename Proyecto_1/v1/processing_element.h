@@ -29,6 +29,8 @@ public:
   void dec(short reg);
   void jnz(char *label);
   void mov(short reg, double value);
+  Cache *getCache() const { return cache; }
+  const double *getRegisters() const { return regs; }
 
   int getPEId() const { return pe_id; }
   SnoopModule *getSnoop() { return snoop; }

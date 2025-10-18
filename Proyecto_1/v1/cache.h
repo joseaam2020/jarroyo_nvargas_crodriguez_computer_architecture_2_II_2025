@@ -52,6 +52,7 @@ public:
   int getPEId() const { return pe_id; }
   void printCache() const;
   void setSnoop(SnoopModule *snoop);
+  const std::vector<std::vector<CacheLine>> &getSets() const { return sets; }
 };
 
 #endif

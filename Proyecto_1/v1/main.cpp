@@ -2,6 +2,7 @@
 #include "processing_element.h"
 #include "snoop.h"
 #include <vector>
+#include <thread>
 
 int main() {
 
@@ -39,61 +40,44 @@ int main() {
   std::cout << "║                    SIMULATION START                      ║\n";
   std::cout << "╚══════════════════════════════════════════════════════════╝\n";
 
-  pes[0]->mov(0, 0);
-  pes[0]->mov(1, 8);
-  pes[0]->mov(2, 16);
-  pes[0]->mov(3, 24);
+  std::vector<std::thread> threads;
 
-  pes[0]->printStatus();
+  for (auto pe : pes) {
+    threads.emplace_back([pe]() {
+        // Cada PE hace cosas distintas, se identifica con su ID
+        int id = pe->getPEId(); 
 
-  memory->printMemory();
+        if (id == 0) {
+            // PE0 ejecuta estas instrucciones (EJEMPLO)
+            pe->mov(0, 0);
+            pe->mov(1, 8);
+            pe->load(0, 0);
+            pe->load(1, 1);
+            pe->fmul(2, 0, 1);
+            pe->store(2, 16);
+            std::cout << "[PE0] terminó su ejecución.\n";
+        } 
+        else if (id == 1) {
+            // PE1 ejecuta otras instrucciones (EJEMPLO)
+            pe->mov(0, 32);
+            pe->mov(1, 40);
+            pe->load(0, 0);
+            pe->load(1, 1);
+            pe->fadd(2, 0, 1);
+            pe->store(2, 48);
+            std::cout << "[PE1] terminó su ejecución.\n";
+        }
 
-  pes[0]->load(0, 0);
-  pes[0]->load(1, 1);
-  pes[0]->load(2, 2);
-  pes[0]->load(3, 3);
+        pe->printStatus();
+    }); 
+  }
 
-  pes[0]->printStatus();
+  // Esperar a que todos los hilos terminen
+  for (auto &t : threads) {
+      t.join();
+  }
 
-  memory->printMemory();
-
-  pes[1]->mov(0, 32);
-  pes[1]->mov(1, 40);
-  pes[1]->mov(2, 48);
-  pes[1]->mov(3, 56);
-
-  pes[1]->printStatus();
-
-  pes[1]->load(0, 0);
-  pes[1]->load(1, 1);
-  pes[1]->load(2, 2);
-  pes[1]->load(3, 3);
-
-  pes[1]->printStatus();
-
-  pes[0]->mov(4, 2);
-  pes[0]->fmul(0, 0, 4);
-  pes[0]->fmul(1, 1, 4);
-  pes[0]->fmul(2, 2, 4);
-  pes[0]->fmul(3, 3, 4);
-
-  pes[0]->printStatus();
-
-  pes[0]->mov(4, 0);
-  pes[0]->mov(5, 8);
-  pes[0]->mov(6, 16);
-  pes[0]->mov(7, 24);
-
-  pes[0]->printStatus();
-
-  pes[0]->store(0, 4);
-  pes[0]->store(1, 5);
-  pes[0]->store(2, 6);
-  pes[0]->store(3, 7);
-
-  pes[0]->printStatus();
-
-  memory->printMemory();
+  memory->printMemory(); // No sé si esto va a aquí o en otro lado
 
   for (auto pe : pes) {
     delete pe;

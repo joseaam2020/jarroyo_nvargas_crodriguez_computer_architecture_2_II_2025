@@ -2,6 +2,8 @@
 #include <FL/Fl_File_Chooser.H>
 #include <fstream>
 #include <iostream>
+#include <algorithm> 
+#include <cctype>
 
 const int LINE_HEIGHT = 30;
 const int MARGIN = 10;
@@ -32,6 +34,7 @@ FileLineSelector::FileLineSelector(int x, int y, int w, int h, Fl_Window *parent
 }
 
 // Cargar archivo de instrucciones ---
+// Cargar archivo de instrucciones ---
 void FileLineSelector::load_instructions_file() {
   const char *filename = fl_file_chooser("Seleccionar archivo de instrucciones", "*.txt", nullptr);
   if (!filename)
@@ -45,19 +48,27 @@ void FileLineSelector::load_instructions_file() {
 
   std::vector<std::string> instruction_lines;
   std::string line;
-  
-  // Leer y procesar el archivo
+
   while (std::getline(file, line)) {
-    // Limpiar la línea de espacios en blanco
-    size_t start = line.find_first_not_of(" \t");
-    if (start != std::string::npos) {
-      size_t end = line.find_last_not_of(" \t");
-      std::string clean_line = line.substr(start, end - start + 1);
-      
-      // Ignorar líneas vacías pero mantener las que tienen contenido
-      if (!clean_line.empty()) {
-        instruction_lines.push_back(clean_line);
+    // PASO 1: Eliminar TODOS los caracteres de control y no imprimibles
+    std::string cleaned;
+    for (unsigned char c : line) {
+      // Solo mantener caracteres imprimibles ASCII (32-126) y espacios/tabs
+      if ((c >= 32 && c <= 126) || c == '\t') {
+        cleaned += c;
       }
+    }
+    line = cleaned;
+
+    // PASO 2: Eliminar espacios iniciales y finales
+    size_t start = line.find_first_not_of(" \t");
+    if (start == std::string::npos) continue; // línea vacía
+    
+    size_t end = line.find_last_not_of(" \t");
+    line = line.substr(start, end - start + 1);
+
+    if (!line.empty()) {
+      instruction_lines.push_back(line);
     }
   }
 
@@ -75,6 +86,7 @@ void FileLineSelector::load_instructions_file() {
   std::cout << "=====================================" << std::endl;
 }
 
+// --- Función para cargar archivo normal ---
 // --- Función para cargar archivo normal ---
 void FileLineSelector::load_file() {
   const char *filename = fl_file_chooser("Seleccionar archivo", "*", nullptr);
@@ -104,11 +116,34 @@ void FileLineSelector::load_file() {
 
   std::string line;
   while (std::getline(file, line)) {
-    file_lines.push_back(line);
+    // Limpieza de caracteres no imprimibles (IGUAL QUE EN load_instructions_file)
+    line.erase(std::remove_if(line.begin(), line.end(),
+        [](unsigned char c) {
+          return (c < 32 && c != 9) || c == 127 || c == '\r' || c == '\n' || c == '\t';
+        }),
+        line.end());
+
+    // Eliminar espacios iniciales y finales
+    line.erase(line.begin(), std::find_if(line.begin(), line.end(),
+        [](unsigned char ch) { return !std::isspace(ch); }));
+    line.erase(std::find_if(line.rbegin(), line.rend(),
+        [](unsigned char ch) { return !std::isspace(ch); }).base(), line.end());
+
+    if (!line.empty()) {
+      file_lines.push_back(line);
+    }
   }
 
   file.close();
   display_lines();
+  
+  // Debug: imprimir las líneas cargadas
+  std::cout << "=== ARCHIVO CARGADO ===" << std::endl;
+  std::cout << "Total de líneas: " << file_lines.size() << std::endl;
+  for (size_t i = 0; i < file_lines.size(); ++i) {
+    std::cout << "[" << i << "] " << file_lines[i] << std::endl;
+  }
+  std::cout << "======================" << std::endl;
 }
 
 // --- Función para cargar archivo de memoria ---
@@ -156,6 +191,9 @@ void FileLineSelector::display_lines() {
 
     Fl_Box *line_box = new Fl_Box(MARGIN + 110, y, scroll->w() - 150,
                                   LINE_HEIGHT, file_lines[i].c_str());
+
+
+
     line_box->box(FL_FLAT_BOX);
     line_box->color(FL_WHITE);
     line_box->labelsize(14);
@@ -172,88 +210,76 @@ void FileLineSelector::display_lines() {
 }
 
 void FileLineSelector::toggle_line_selection(int index) {
-  if (index < 0 || index >= static_cast<int>(line_entries.size()))
+  if (index < 0 || index >= static_cast<int>(file_lines.size()))
     return;
-
-  LineEntry &entry = line_entries[index];
-  entry.selected = !entry.selected;
-
-  std::string current_text = file_lines[index];
 
   // Variable estática para recordar el último breakpoint alcanzado
   static int last_breakpoint_index = -1;
 
-  if (entry.selected) {
-    // Marcar visualmente la línea seleccionada
-    entry.line_box->color(FL_YELLOW);
-    entry.select_button->color(FL_GREEN);
+  std::string current_line = file_lines[index];
+  
+  // Verificar si ya hay un breakpoint después de esta línea
+  bool has_breakpoint = (index + 1 < static_cast<int>(file_lines.size()) &&
+                         file_lines[index + 1].find("#BREAKPOINT") != std::string::npos);
 
-    // Agregar el marcador de BREAKPOINT justo al final
-    if (current_text.find("#BREAKPOINT") == std::string::npos) {
-      // Eliminar espacios al final para evitar repeticiones innecesarias
-      while (!current_text.empty() && std::isspace(current_text.back())) {
-        current_text.pop_back();
-      }
+  if (!has_breakpoint) {
+    // AGREGAR BREAKPOINT
+    file_lines.insert(file_lines.begin() + index + 1, "#BREAKPOINT");
+    breakpoint_count++;
 
-      current_text += "  #BREAKPOINT";
-      file_lines[index] = current_text;
-      entry.line_box->copy_label(file_lines[index].c_str());
-      breakpoint_count++;
+    // Imprimir instrucciones desde el último breakpoint hasta el actual
+    int start_index = last_breakpoint_index + 1;
+    int end_index = index + 1; // ahora el breakpoint está en index+1
 
-      // ---  imprimir instrucciones desde el último breakpoint hasta el actual ---
-      int start_index = last_breakpoint_index + 1;
-      int end_index = index;
+    std::cout << "\n=== Instrucciones desde línea "
+              << start_index << " hasta " << end_index << " ===" << std::endl;
 
-      std::cout << "\n=== Instrucciones desde línea "
-                << start_index << " hasta " << end_index << " ===" << std::endl;
-
-      for (int i = start_index; i <= end_index && i < static_cast<int>(file_lines.size()); ++i) {
-        std::cout << "[" << i << "] " << file_lines[i] << std::endl;
-      }
-
-      std::cout << "=============================================\n" << std::endl;
-
-      // Actualizar el último breakpoint alcanzado
-      last_breakpoint_index = end_index;
+    for (int i = start_index; i <= end_index && i < static_cast<int>(file_lines.size()); ++i) {
+      std::cout << "[" << i << "] " << file_lines[i] << std::endl;
     }
+    std::cout << "=============================================\n" << std::endl;
+
+    last_breakpoint_index = end_index;
 
   } else {
-    // Desmarcar visualmente la línea
-    entry.line_box->color(FL_WHITE);
-    entry.select_button->color(FL_LIGHT2);
+    // ELIMINAR BREAKPOINT
+    file_lines.erase(file_lines.begin() + index + 1);
+    breakpoint_count--;
 
-    // Eliminar el marcador de BREAKPOINT
-    size_t pos = current_text.find("#BREAKPOINT");
-    if (pos != std::string::npos) {
-      current_text.erase(pos, std::string("#BREAKPOINT").length());
-      // Eliminar espacios sobrantes que queden al final
-      while (!current_text.empty() && std::isspace(current_text.back())) {
-        current_text.pop_back();
-      }
-
-      file_lines[index] = current_text;
-      entry.line_box->copy_label(file_lines[index].c_str());
-      breakpoint_count--;
-
-      std::cout << "\n=== Instrucciones tras quitar BREAKPOINT (línea "
-                << index << ") ===" << std::endl;
-      for (int i = 0; i <= index && i < static_cast<int>(file_lines.size()); ++i) {
-        std::cout << "[" << i << "] " << file_lines[i] << std::endl;
-      }
-      std::cout << "=============================================\n" << std::endl;
-    }
+    std::cout << "\n=== BREAKPOINT removido después de línea " << index << " ===" << std::endl;
   }
 
-  // Refrescar elementos visuales
-  entry.line_box->redraw();
-  entry.select_button->redraw();
+  // Debug: mostrar todas las líneas
+  std::cout << "\n=== Estado actual de file_lines ===" << std::endl;
+  for (size_t i = 0; i < file_lines.size(); ++i) {
+    std::cout << "[" << i << "] " << file_lines[i] << std::endl;
+  }
+  std::cout << "====================================\n" << std::endl;
 
+  // IMPORTANTE: Re-crear toda la visualización
+  display_lines();
+
+  for (size_t i = 0; i < file_lines.size(); ++i) {
+    if (i + 1 < file_lines.size() && 
+        file_lines[i + 1].find("#BREAKPOINT") != std::string::npos &&
+        i < line_entries.size()) {
+      // Esta línea tiene un breakpoint después, colorearla
+      line_entries[i].line_box->color(FL_YELLOW);
+      line_entries[i].select_button->color(FL_GREEN);
+      line_entries[i].select_button->copy_label("Quitar");
+      line_entries[i].selected = true;
+    }
+  }
+  
+  scroll->redraw();
   // Actualizar contador de breakpoints
-  bp_counter_box->label(("Breakpoints: " + std::to_string(breakpoint_count)).c_str());
+  std::string bp_label = "Breakpoints: " + std::to_string(breakpoint_count);
+  bp_counter_box->copy_label(bp_label.c_str());
   bp_counter_box->redraw();
 
   std::cout << "Breakpoints activos: " << breakpoint_count << std::endl;
 }
+
 
 
 // --- Callbacks ---

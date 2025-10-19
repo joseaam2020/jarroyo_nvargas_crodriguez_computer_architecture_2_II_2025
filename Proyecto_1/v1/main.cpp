@@ -50,7 +50,7 @@ int main() {
           std::stoi(line.substr(3)); // Obtener el número de PE correspondiente
       pe_instructions[current_pe].push_back({}); // Crear el primer bloque
     } else if (current_pe != -1) {
-      if (line == "break") {
+      if (line == "#BREAKPOINT") {
         // Aquí, si no hay instrucciones después del break, se ignora
         pe_instructions[current_pe].push_back({});
       } else {

@@ -329,7 +329,7 @@ int main() {
   // btn_step->callback(step_by_step);
 
   // Botón BreakPoint
-  Fl_Button *btn_bkp = new Fl_Button(855, 10, 90, 30, "BreakPoint");
+  Fl_Button *btn_bkp = new Fl_Button(855, 10, 90, 30, "RUN");
   btn_bkp->color(fl_rgb_color(200, 180, 255));
   // btn_bkp->callback(step_by_step);
 

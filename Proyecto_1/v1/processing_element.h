@@ -30,6 +30,8 @@ public:
   void dec(short reg);
   void jnz(std::string label);
   void mov(short reg, double value);
+  Cache *getCache() const { return cache; }
+  const double *getRegisters() const { return regs; }
   void execute(std::string op);
 
   int getPEId() const { return pe_id; }

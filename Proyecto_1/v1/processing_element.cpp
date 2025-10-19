@@ -65,7 +65,7 @@ void ProcessingElement::mov(short reg, double value) {
 }
 
 void ProcessingElement::execute(std::string op) {
-
+ 
   // Lista para guardar los tokens
   std::vector<std::string> token_list;
 
@@ -94,18 +94,16 @@ void ProcessingElement::execute(std::string op) {
       // load r5, [r0]
       std::string dest_reg = token_list[1];  // Obtiene r#
       std::string dest_regd = token_list[2]; // Obtiene [r#]
+    
 
       // Obtener el número en r#
       short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+    
 
-      // Obtener número de [r#]
-      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-        std::string addr_regd =
-            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
+      short regd = std::stoi(dest_regd.substr(2,3)); // [r#] -> #
 
-        this->load(reg, regd);
-      }
+      this->load(reg, regd);
+      
     }
 
     if (command == "store") {
@@ -117,13 +115,9 @@ void ProcessingElement::execute(std::string op) {
       short reg = std::stoi(dest_reg.substr(1)); // r# -> #
 
       // Obtener número de [r#]
-      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-        std::string addr_regd =
-            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
-
-        this->store(reg, regd);
-      }
+      short regd = std::stoi(dest_regd.substr(2,3)); // [r#] -> #
+      this->store(reg, regd);
+      
     }
 
     if (command == "fmul") {

@@ -108,14 +108,14 @@ void Cache::setData(int addr, double value) {
     CacheLine old_line = sets[index][lfu_way];
 
     if (verified_line) {
-      if (verified_line->state == mesi_state::INVALID){
+      if (verified_line->state == mesi_state::INVALID) {
         verified_line->state = line.state;
         verified_line->usage_count++;
         for (short i = 0; i < 4; i++) {
           verified_line->data[i] = line.data[i];
         }
       }
-      
+
     } else {
       line.tag = tag;
       line.usage_count = 1;
@@ -130,8 +130,6 @@ void Cache::setData(int addr, double value) {
         }
       }
     }
-
-
   }
 
   // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de
@@ -186,3 +184,23 @@ CacheLine *Cache::getLine(int address) {
 }
 
 void Cache::setSnoop(SnoopModule *snoop) { this->snoop = snoop; }
+
+void Cache::flush() {
+  for (short current_set = 0; current_set < num_sets; current_set++) {
+    auto &set = sets[current_set];
+    for (short current_way = 0; current_way < num_ways; current_way++) {
+      const CacheLine &line = set[current_way];
+
+      if (line.state != mesi_state::INVALID) {
+        short block_number = (line.tag << 3) | current_set;
+
+        for (short offset = 0; offset < 4; offset++) {
+          short word_index = block_number * 4 + offset;
+          int address = word_index * 8; // Usa int por seguridad
+
+          snoop->writeToMem(address, line.data[offset]);
+        }
+      }
+    }
+  }
+}

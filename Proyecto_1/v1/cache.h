@@ -53,6 +53,8 @@ public:
   void printCache() const;
   void setSnoop(SnoopModule *snoop);
   const std::vector<std::vector<CacheLine>> &getSets() const { return sets; }
+
+  void flush();
 };
 
 #endif

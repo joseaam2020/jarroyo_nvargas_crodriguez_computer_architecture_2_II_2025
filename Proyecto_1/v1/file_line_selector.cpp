@@ -18,6 +18,15 @@ FileLineSelector::FileLineSelector(int x, int y, int w, int h, Fl_Window *parent
   load_button->color(fl_rgb_color(180, 255, 180)); // Verde claro
   load_button->callback(load_button_cb, this);
 
+  bp_counter_box = new Fl_Box(x + 300, y + MARGIN, 150, 30, "Breakpoints: 0");
+  bp_counter_box->box(FL_FLAT_BOX);
+  bp_counter_box->color(fl_rgb_color(240, 240, 240));
+  bp_counter_box->labelsize(14);
+  bp_counter_box->align(FL_ALIGN_CENTER);
+
+
+
+
   scroll = new Fl_Scroll(x, y + 50, w, h - 60);
   scroll->box(FL_DOWN_BOX);
 }
@@ -163,22 +172,89 @@ void FileLineSelector::display_lines() {
 }
 
 void FileLineSelector::toggle_line_selection(int index) {
-  if (index < 0 || index >= static_cast<int>(line_entries.size())) return;
+  if (index < 0 || index >= static_cast<int>(line_entries.size()))
+    return;
 
   LineEntry &entry = line_entries[index];
   entry.selected = !entry.selected;
 
+  std::string current_text = file_lines[index];
+
+  // Variable estática para recordar el último breakpoint alcanzado
+  static int last_breakpoint_index = -1;
+
   if (entry.selected) {
+    // Marcar visualmente la línea seleccionada
     entry.line_box->color(FL_YELLOW);
     entry.select_button->color(FL_GREEN);
+
+    // Agregar el marcador de BREAKPOINT justo al final
+    if (current_text.find("#BREAKPOINT") == std::string::npos) {
+      // Eliminar espacios al final para evitar repeticiones innecesarias
+      while (!current_text.empty() && std::isspace(current_text.back())) {
+        current_text.pop_back();
+      }
+
+      current_text += "  #BREAKPOINT";
+      file_lines[index] = current_text;
+      entry.line_box->copy_label(file_lines[index].c_str());
+      breakpoint_count++;
+
+      // ---  imprimir instrucciones desde el último breakpoint hasta el actual ---
+      int start_index = last_breakpoint_index + 1;
+      int end_index = index;
+
+      std::cout << "\n=== Instrucciones desde línea "
+                << start_index << " hasta " << end_index << " ===" << std::endl;
+
+      for (int i = start_index; i <= end_index && i < static_cast<int>(file_lines.size()); ++i) {
+        std::cout << "[" << i << "] " << file_lines[i] << std::endl;
+      }
+
+      std::cout << "=============================================\n" << std::endl;
+
+      // Actualizar el último breakpoint alcanzado
+      last_breakpoint_index = end_index;
+    }
+
   } else {
+    // Desmarcar visualmente la línea
     entry.line_box->color(FL_WHITE);
     entry.select_button->color(FL_LIGHT2);
+
+    // Eliminar el marcador de BREAKPOINT
+    size_t pos = current_text.find("#BREAKPOINT");
+    if (pos != std::string::npos) {
+      current_text.erase(pos, std::string("#BREAKPOINT").length());
+      // Eliminar espacios sobrantes que queden al final
+      while (!current_text.empty() && std::isspace(current_text.back())) {
+        current_text.pop_back();
+      }
+
+      file_lines[index] = current_text;
+      entry.line_box->copy_label(file_lines[index].c_str());
+      breakpoint_count--;
+
+      std::cout << "\n=== Instrucciones tras quitar BREAKPOINT (línea "
+                << index << ") ===" << std::endl;
+      for (int i = 0; i <= index && i < static_cast<int>(file_lines.size()); ++i) {
+        std::cout << "[" << i << "] " << file_lines[i] << std::endl;
+      }
+      std::cout << "=============================================\n" << std::endl;
+    }
   }
 
+  // Refrescar elementos visuales
   entry.line_box->redraw();
   entry.select_button->redraw();
+
+  // Actualizar contador de breakpoints
+  bp_counter_box->label(("Breakpoints: " + std::to_string(breakpoint_count)).c_str());
+  bp_counter_box->redraw();
+
+  std::cout << "Breakpoints activos: " << breakpoint_count << std::endl;
 }
+
 
 // --- Callbacks ---
 void FileLineSelector::load_button_cb(Fl_Widget *, void *user_data) {

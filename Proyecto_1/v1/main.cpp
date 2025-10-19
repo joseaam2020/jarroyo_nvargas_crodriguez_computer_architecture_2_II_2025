@@ -6,6 +6,28 @@
 #include <thread>
 #include <vector>
 
+// Vector de instrucciones (obtenido de instrucciones.txt)
+std::vector<std::string> file_lines = {".PE0",
+                                       "mov  r0, #16",
+                                       "mov  r1, #2",
+                                       "mov  r2, #3",
+                                       "fmul r3, r1, r2",
+                                       "break",
+                                       "store r3, [r0]",
+                                       "mov  r4, #6",
+                                       "load r5, [r0]",
+                                       "fadd r6, r5, r4",
+                                       ".PE1",
+                                       "mov  r0, #16",
+                                       "mov  r1, #2",
+                                       "mov  r2, #3",
+                                       "fmul r3, r1, r2",
+                                       "break",
+                                       "store r3, [r0]",
+                                       "mov  r4, #6",
+                                       "load r5, [r0]",
+                                       "fadd r6, r5, r4"};
+
 std::mutex print_mutex;
 
 int main() {
@@ -15,6 +37,41 @@ int main() {
   std::cout << "║           Vector Multiplication (2 PEs)                  ║\n";
   std::cout << "╚══════════════════════════════════════════════════════════╝\n";
   std::cout << std::endl;
+
+  int pe_amount = 2; // Cantidad de PEs a ejecutar
+  // Dividir las intrucciones en varios vectores (para cada PE)
+  // pe_instructions[#] va a tener las instrucciones de PE# (solo instrucciones)
+  std::vector<std::vector<std::vector<std::string>>> pe_instructions(pe_amount);
+  int current_pe = -1;
+
+  for (const auto &line : file_lines) {
+    if (line.rfind(".PE", 0) == 0) { // Si empieza con ".PE"
+      current_pe =
+          std::stoi(line.substr(3)); // Obtener el número de PE correspondiente
+      pe_instructions[current_pe].push_back({}); // Crear el primer bloque
+    } else if (current_pe != -1) {
+      if (line == "break") {
+        // Aquí, si no hay instrucciones después del break, se ignora
+        pe_instructions[current_pe].push_back({});
+      } else {
+        // En caso de que hayan instrucciones, se agregar al final
+        pe_instructions[current_pe].back().push_back(line);
+      }
+    }
+  }
+
+  // Print para verificar
+  for (int i = 0; i < pe_amount; i++) {
+    std::cout << "\n=== PE" << i << " ===\n";
+    for (size_t b = 0; b < pe_instructions[i].size(); ++b) {
+      if (pe_instructions[i][b].empty())
+        continue;
+      std::cout << "  Bloque " << b << ":\n";
+      for (auto &instr : pe_instructions[i][b]) {
+        std::cout << "    " << instr << "\n";
+      }
+    }
+  }
 
   Memory *memory = new Memory();
 
@@ -39,21 +96,71 @@ int main() {
   Interconnect *bus = new Interconnect(memory);
 
   std::vector<ProcessingElement *> pes;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < pe_amount; i++) {
     ProcessingElement *pe = new ProcessingElement(i, bus);
     bus->registerSnoopModule(pe->getSnoop());
     pes.push_back(pe);
   }
 
-  std::cout << "\n📋 MEMORIA INICIAL:\n";
+  std::cout << "\n MEMORIA INICIAL:\n";
   memory->printMemory();
 
+  // En caso de regresar, el comentario grande de abajo va a aquí
+
+  // Este código ejecuta la los hilos de cada PE en paralelo
+  // Las intrucciones se ejecutan de forma secuencial
+  std::vector<std::thread> threads;
+  for (int i = 0; i < pe_amount; i++) {
+    threads.emplace_back([&, i]() {
+      for (const auto &block : pe_instructions[i]) {
+        std::cout << "[Bloque]\n";
+        for (const auto &instr : block) {
+          pes[i]->execute(instr);
+
+          std::lock_guard<std::mutex> lock(print_mutex);
+        }
+      }
+
+      std::lock_guard<std::mutex> lock(print_mutex);
+      // std::cout << "[PE" << i << "] ejecución finalizada.\n";
+    });
+  }
+
+  // Esperar a que todos terminen
+  for (auto &t : threads)
+    t.join();
+
+  for (auto pe : pes) {
+    pe->printStatus();
+  }
+
+  std::cout << "\n MEMORIA FINAL:\n";
+  memory->printMemory();
+
+  // ─────────────── LIMPIEZA ───────────────
+  for (auto pe : pes)
+    delete pe;
+  delete bus;
+  delete memory;
+
+  return 0;
+}
+
+/*    // ─────────────── SIMULATION START ───────────────
+    std::cout << "\n\n";
+    std::cout <<
+"╔══════════════════════════════════════════════════════════╗\n"; std::cout <<
+"║                    SIMULATION START                      ║\n"; std::cout <<
+"║  Operación: C[i] = A[i] * B[i] (multiplicación)         ║\n"; std::cout <<
+"╚══════════════════════════════════════════════════════════╝\n";
+=======
   // ─────────────── SIMULATION START ───────────────
   std::cout << "\n\n";
   std::cout << "╔══════════════════════════════════════════════════════════╗\n";
   std::cout << "║                    SIMULATION START                      ║\n";
   std::cout << "║  Operación: C[i] = A[i] * B[i] (multiplicación)         ║\n";
   std::cout << "╚══════════════════════════════════════════════════════════╝\n";
+>>>>>>> Jose-Interfaz
 
   // ─────────────── FASE 1 ───────────────
   std::cout
@@ -150,82 +257,17 @@ int main() {
       std::cout << "[PE0] Fase 3 completada\n";
     });
 
-    for (auto &t : threads)
-      t.join();
+ for (auto &t : threads) t.join();
 
-    for (auto pe : pes) {
-      std::lock_guard<std::mutex> lock(print_mutex);
-      pe->printStatus();
+        for (auto pe : pes) {
+            std::lock_guard<std::mutex> lock(print_mutex);
+            pe->printStatus();
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(print_mutex);
+            std::cout << "\n MEMORIA FINAL:\n";
+            memory->printMemory();
+        }
     }
-  }
-
-  // ─────────────── FASE 4 ───────────────
-  std::cout
-      << "\n\n┌─────────────────────────────────────────────────────────┐\n";
-  std::cout << "│ FASE 4: PE1 lee C[0] que PE0 tiene en MODIFIED         │\n";
-  std::cout << "│ Esperado: PE0 MODIFIED → SHARED, PE1 INVALID → SHARED  │\n";
-  std::cout << "└─────────────────────────────────────────────────────────┘\n";
-
-  {
-    std::vector<std::thread> threads;
-    threads.emplace_back([&]() {
-      pes[1]->mov(6, 64);
-      pes[1]->load(2, 6);
-
-      std::lock_guard<std::mutex> lock(print_mutex);
-      std::cout << "[PE1] Fase 4 completada\n";
-    });
-
-    for (auto &t : threads)
-      t.join();
-
-    for (auto pe : pes) {
-      std::lock_guard<std::mutex> lock(print_mutex);
-      pe->printStatus();
-    }
-  }
-
-  // ─────────────── FASE 5 ───────────────
-  std::cout
-      << "\n\n┌─────────────────────────────────────────────────────────┐\n";
-  std::cout << "│ FASE 5: PE0 escribe en C[0] que está en SHARED         │\n";
-  std::cout << "│ Esperado: PE0 SHARED → MODIFIED, PE1 SHARED → INVALID  │\n";
-  std::cout << "└─────────────────────────────────────────────────────────┘\n";
-
-  {
-    std::vector<std::thread> threads;
-    threads.emplace_back([&]() {
-      pes[0]->mov(7, 2);
-      pes[0]->load(0, 4);
-      pes[0]->fmul(0, 0, 7);
-      pes[0]->store(0, 4);
-
-      std::lock_guard<std::mutex> lock(print_mutex);
-      std::cout << "[PE0] Fase 5 completada\n";
-    });
-
-    for (auto &t : threads)
-      t.join();
-
-    for (auto pe : pes) {
-      std::lock_guard<std::mutex> lock(print_mutex);
-      pe->printStatus();
-    }
-  }
-
-  std::cout << "\n MEMORIA FINAL:\n";
-
-  for (auto pe : pes) {
-    pe->getCache()->flush();
-  }
-
-  memory->printMemory();
-
-  // ─────────────── LIMPIEZA ───────────────
-  for (auto pe : pes)
-    delete pe;
-  delete bus;
-  delete memory;
-
-  return 0;
-}
+*/

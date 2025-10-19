@@ -3,13 +3,27 @@
 
 #include "mem.h"
 #include <vector>
+#include <queue>
+#include <mutex>
+#include <array>
 
 class SnoopModule;
+
+struct BusRequest {
+    int pe_id;
+    std::string op;
+    int address;
+    int valude;
+  };
 
 class Interconnect {
 private:
   std::vector<SnoopModule*> snoop_modules;
   Memory *memory;
+  
+  // Este es el mutex global para el bus
+  // Para asegurar que solo un hilo acceda al bus a la vez
+  std::mutex bus_mutex; 
 
 public:
   Interconnect(Memory *mem);
@@ -19,7 +33,7 @@ public:
   struct BusResult {
     bool shared;
     bool modified;
-    double data[4];
+    std::array<double, 4> data;
     int owner_pe;
 
     BusResult() : shared(false), modified(false), owner_pe(-1) {
@@ -27,6 +41,8 @@ public:
         data[i] = 0.0;
     }
   };
+
+  
 
   BusResult broadcastRead(int requesting_pe, int address);
   void broadcastInvalidate(int requesting_pe, int address);

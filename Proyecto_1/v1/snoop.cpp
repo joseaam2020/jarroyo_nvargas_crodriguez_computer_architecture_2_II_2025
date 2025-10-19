@@ -104,10 +104,13 @@ CacheLine SnoopModule::handleReadMiss(int address) {
 
   CacheLine new_line;
   new_line.state = new_state;
+
   for (short i = 0; i < 4; i++) {
     new_line.data[i] = bus_result.data[i];
+    /*
     std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
               << std::endl;
+    */
   }
 
   return new_line;

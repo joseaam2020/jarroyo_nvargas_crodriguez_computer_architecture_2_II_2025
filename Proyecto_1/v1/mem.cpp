@@ -21,17 +21,20 @@ std::array<double, 4> Memory::read(int address) {
   // Alinear al inicio del bloque (bloque de 4 palabras)
   int block_start = word_index - (word_index % 4);
 
+  /*
   std::cout << "Address " << address << std::endl;
   std::cout << "Word Index " << word_index << std::endl;
   std::cout << "Block start " << block_start << std::endl;
+  */
 
   // Leer las 4 palabras del bloque
   std::array<double, 4> block;
   for (int i = 0; i < 4; i++) {
-    std::cout << "Prueba: " << storage[0] << std::endl;
     block[i] = storage[block_start + i];
+    /*
     std::cout << "Dato " << i << " Leido : " << storage[block_start + i]
               << std::endl;
+    */
   }
 
   return block;

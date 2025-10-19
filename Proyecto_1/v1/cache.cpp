@@ -24,7 +24,6 @@ double Cache::getData(int addr) {
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     return line->data[offset];
   } else { // Sino
-    std::cout << "HAGO LO QUE ME DA LA GANA" << std::endl;
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -46,10 +45,11 @@ double Cache::getData(int addr) {
 
     // Pedirle a Snoop que solicite a Interconnect linea de memoria
     CacheLine new_line = this->snoop->handleReadMiss(addr);
+    /*
     for (int i = 0; i < 4; i++) {
       std::cout << "Dato " << i << " Recibido : " << new_line.data[i]
                 << std::endl;
-    }
+    }*/
 
     if (line) {
       line->state = new_line.state;
@@ -81,9 +81,10 @@ void Cache::setData(int addr, double value) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
   }
 
+  CacheLine *verified_line = this->getLine(addr);
   CacheLine line = this->snoop->handleWrite(addr, value);
 
-  printf("ESTADO LINEA: %s", mesiStateToString(line.state));
+  // printf("ESTADO LINEA: %s", mesiStateToString(line.state));
 
   if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
 
@@ -106,18 +107,31 @@ void Cache::setData(int addr, double value) {
     // Linea a cambiar
     CacheLine old_line = sets[index][lfu_way];
 
-    // Actualizar memoria si tag diferente de 1;
-    int base_index = word_index - offset;
-    if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
-      for (short i = 0; i < 4; i++) {
-        snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+    if (verified_line) {
+      if (verified_line->state == mesi_state::INVALID){
+        verified_line->state = line.state;
+        verified_line->usage_count++;
+        for (short i = 0; i < 4; i++) {
+          verified_line->data[i] = line.data[i];
+        }
+      }
+      
+    } else {
+      line.tag = tag;
+      line.usage_count = 1;
+
+      sets[index][lfu_way] = line;
+
+      // Actualizar memoria si tag diferente de -1 y linea valida;
+      int base_index = word_index - offset;
+      if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+        for (short i = 0; i < 4; i++) {
+          snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
+        }
       }
     }
 
-    line.tag = tag;
-    line.usage_count = 1;
 
-    sets[index][lfu_way] = line;
   }
 
   // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de

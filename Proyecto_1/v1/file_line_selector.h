@@ -16,7 +16,7 @@ public:
   void load_memory_file(); 
   void load_instructions_file(); 
   
-
+  const std::vector<std::string> &get_file_lines() const;
   const std::vector<std::string> &get_selected_lines() const;
 
 private:

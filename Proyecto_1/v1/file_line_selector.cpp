@@ -280,8 +280,6 @@ void FileLineSelector::toggle_line_selection(int index) {
   std::cout << "Breakpoints activos: " << breakpoint_count << std::endl;
 }
 
-
-
 // --- Callbacks ---
 void FileLineSelector::load_button_cb(Fl_Widget *, void *user_data) {
   auto *self = static_cast<FileLineSelector *>(user_data);
@@ -309,4 +307,16 @@ const std::vector<std::string> &FileLineSelector::get_selected_lines() const {
     }
   }
   return selected;
+}
+
+const std::vector<std::string> &FileLineSelector::get_file_lines() const {
+  static std::vector<std::string> selected;
+  selected.clear();
+
+  for (size_t i = 0; i < file_lines.size(); ++i) {
+      selected.push_back(file_lines[i]);
+  
+  }
+  return selected;
+
 }

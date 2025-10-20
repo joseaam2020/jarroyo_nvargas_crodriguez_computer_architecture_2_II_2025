@@ -9,7 +9,7 @@ load  r5, [r0]
 fadd  r6, r5, r4
 
 .PE1
-mov  r0, #16
+mov  r0, #8
 mov  r1, #2
 mov  r2, #3
 fmul r3, r1, r2
@@ -19,7 +19,7 @@ load  r5, [r0]
 fadd  r6, r5, r4
 
 .PE2
-mov  r0, #20
+mov  r0, #24
 mov  r1, #4
 mov  r2, #5
 fmul r3, r1, r2
@@ -29,7 +29,7 @@ load  r5, [r0]
 fadd  r6, r5, r4
 
 .PE3
-mov  r0, #20
+mov  r0, #32
 mov  r1, #4
 mov  r2, #5
 fmul r3, r1, r2

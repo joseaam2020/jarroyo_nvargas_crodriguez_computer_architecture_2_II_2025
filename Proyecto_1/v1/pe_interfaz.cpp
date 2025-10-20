@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #define NUM_PE 4
 #define NUM_REG 8
@@ -24,6 +25,9 @@
 #define DATA_PER_CACHE 4
 #define BLOCKS 128
 #define ADDRS_PER_BLOCK 4
+
+
+int exe_index = 0;
 
 // ==========================================
 // Table para Memoria
@@ -208,6 +212,13 @@ private:
   }
 };
 
+struct RunData {
+    FileLineSelector* inst;
+    int* exe_index;
+    std::vector<ProcessingElement*>* pes;
+};
+
+
 // ==========================================
 // Callbacks
 // ==========================================
@@ -249,7 +260,7 @@ void load_memory_cb(Fl_Widget *w, void *data) {
   std::cout << "Memoria cargada: " << filename << std::endl;
 }
 
-// NUEVO CALLBACK para cargar instrucciones
+//  CALLBACK para cargar instrucciones
 void load_instructions_cb(Fl_Widget *w, void *data) {
   FileLineSelector *inst_selector = static_cast<FileLineSelector *>(data);
   inst_selector->load_instructions_file();
@@ -257,6 +268,107 @@ void load_instructions_cb(Fl_Widget *w, void *data) {
   // Mostrar confirmación
   std::cout << "Instrucciones cargadas exitosamente!" << std::endl;
 }
+
+
+
+
+void run(FileLineSelector *fls, int &exe_index, std::vector<ProcessingElement*> *pes) {
+  std::vector<std::vector<std::vector<std::string>>> pe_instructions(4);
+  int current_pe = -1;
+
+  std::vector<std::string> file_lines = fls->get_file_lines(); // ← Necesitas get_file_lines() completo
+  
+  for (const auto &line : file_lines) {
+    if (line.rfind(".PE", 0) == 0) { // Si empieza con ".PE"
+      current_pe = std::stoi(line.substr(3)); // Obtener el número de PE
+      if (current_pe >= 0 && current_pe < 4) {
+        pe_instructions[current_pe].push_back({}); // Crear el primer bloque
+      }
+    } else if (current_pe != -1 && current_pe >= 0 && current_pe < 4) {
+      if (line == "#BREAKPOINT") {
+        // Crear nuevo bloque para el siguiente conjunto de instrucciones
+        pe_instructions[current_pe].push_back({});
+      } else {
+        // Agregar instrucción al bloque actual
+        if (pe_instructions[current_pe].empty()) {
+          pe_instructions[current_pe].push_back({});
+        }
+        pe_instructions[current_pe].back().push_back(line);
+      }
+    }
+    std::cout << "[PE" << line << "] HAGO LO QUE ME DA LA GANA " << exe_index << "\n";
+  }
+
+
+  
+
+  // Print para verificar
+  for (int i = 0; i < 4; i++) {
+    std::cout << "\n=== PE" << i << " ===\n";
+    for (size_t b = 0; b < pe_instructions[i].size(); ++b) {
+      if (pe_instructions[i][b].empty())
+        continue;
+      std::cout << "  Bloque " << b << ":\n";
+      for (const auto &instr : pe_instructions[i][b]) {
+        std::cout << "    " << instr << "\n";
+      }
+    }
+  }
+
+  // Verificar que exe_index sea válido para todos los PEs
+  std::cout << "\n=== Ejecutando bloque " << exe_index << " ===\n";
+  
+  bool all_have_block = true;
+  for (int i = 0; i < 4; i++) {
+    if (exe_index >= static_cast<int>(pe_instructions[i].size()) || 
+        pe_instructions[i][exe_index].empty()) {
+      std::cout << "[PE" << i << "] no tiene bloque " << exe_index << "\n";
+      all_have_block = false;
+    }
+  }
+
+  if (!all_have_block) {
+    std::cout << " No todos los PEs tienen el bloque " << exe_index << "\n";
+    return;
+  }
+
+  // Ejecutar los hilos de cada PE en paralelo
+  std::vector<std::thread> threads;
+  for (int i = 0; i < 4; i++) {
+    threads.emplace_back([&pe_instructions, &pes, i, exe_index]() {
+      const auto &block = pe_instructions[i][exe_index];
+      std::cout << "[PE" << i << "] ejecutando bloque " << exe_index << ":\n";
+      for (const auto &instr : block) {
+        std::cout << "  [PE" << i << "] " << instr << "\n";
+        (*pes)[i]->execute(instr);
+      }
+      std::cout << "[PE" << i << "] bloque " << exe_index << " finalizado.\n";
+    });
+  }
+
+  // Esperar a que todos terminen
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  std::cout << "\n=== Estado de los PEs después del bloque " << exe_index << " ===\n";
+  for (int i = 0; i < 4; i++) {
+    std::cout << "\n[PE" << i << "]:\n";
+    (*pes)[i]->printStatus();
+  }
+
+  std::cout << "\n=== FIN DE EJECUCIÓN DEL BLOQUE " << exe_index << " ===\n\n";
+  exe_index++;
+
+}
+
+  void run_callback(Fl_Widget* widget, void* user_data) {
+    RunData* data = static_cast<RunData*>(user_data);
+    run(data->inst, *(data->exe_index), (data->pes));
+    (*(data->exe_index))++;
+}
+
+
 
 // ==========================================
 // Main
@@ -329,14 +441,10 @@ int main() {
   // btn_step->callback(step_by_step);
 
   // Botón BreakPoint
-  Fl_Button *btn_bkp = new Fl_Button(855, 10, 90, 30, "RUN");
-  btn_bkp->color(fl_rgb_color(200, 180, 255));
-  // btn_bkp->callback(step_by_step);
-
-  
-
-
-
+  Fl_Button *btn_run = new Fl_Button(855, 10, 90, 30, "RUN");
+  btn_run->color(fl_rgb_color(200, 180, 255));
+  RunData* run_data = new RunData{inst, &exe_index, &pes};
+  btn_run->callback(run_callback, run_data); 
 
   win->end();
   win->show();

@@ -296,6 +296,7 @@ void FileLineSelector::select_line_cb(Fl_Widget *, void *data) {
   cb_data->selector->toggle_line_selection(cb_data->index);
 }
 
+
 // --- Get selected lines ---
 const std::vector<std::string> &FileLineSelector::get_selected_lines() const {
   static std::vector<std::string> selected;

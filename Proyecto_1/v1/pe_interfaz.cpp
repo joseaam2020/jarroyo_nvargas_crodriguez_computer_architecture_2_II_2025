@@ -17,6 +17,8 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <unordered_map>
+
 
 #define NUM_PE 4
 #define NUM_REG 8
@@ -27,7 +29,7 @@
 #define ADDRS_PER_BLOCK 4
 
 
-int exe_index = 0;
+std::vector <int>*exe_index = new std::vector<int>(NUM_PE);
 
 // ==========================================
 // Table para Memoria
@@ -214,7 +216,7 @@ private:
 
 struct RunData {
     FileLineSelector* inst;
-    int* exe_index;
+    std::vector<int> *exe_index;
     std::vector<ProcessingElement*>* pes;
 };
 
@@ -410,7 +412,7 @@ void load_instructions_cb(Fl_Widget *w, void *data) {
   g_step_state.initialized = false;
 }
 
-void run(FileLineSelector *fls, int &exe_index, std::vector<ProcessingElement*> *pes) {
+void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<ProcessingElement*> *pes) {
   std::vector<std::vector<std::vector<std::string>>> pe_instructions(NUM_PE);
   int current_pe = -1;
 
@@ -434,12 +436,14 @@ void run(FileLineSelector *fls, int &exe_index, std::vector<ProcessingElement*> 
         pe_instructions[current_pe].back().push_back(line);
       }
     }
-    std::cout << "[PE_LINE] " << line << " exe_index=" << exe_index << "\n";
+    
+   
   }
 
   // Print para verificar
   for (int i = 0; i < NUM_PE; i++) {
     std::cout << "\n=== PE" << i << " ===\n";
+    std::cout << "[PE_LINE] " << i << " (*exe_index)[i]=" << (*exe_index)[i] << "\n";
     for (size_t b = 0; b < pe_instructions[i].size(); ++b) {
       if (pe_instructions[i][b].empty())
         continue;
@@ -451,33 +455,83 @@ void run(FileLineSelector *fls, int &exe_index, std::vector<ProcessingElement*> 
   }
 
   // Verificar que exe_index sea válido para todos los PEs
-  std::cout << "\n=== Ejecutando bloque " << exe_index << " ===\n";
+  
   
   bool all_have_block = true;
   for (int i = 0; i < NUM_PE; i++) {
-    if (exe_index >= static_cast<int>(pe_instructions[i].size()) || 
-        pe_instructions[i][exe_index].empty()) {
-      std::cout << "[PE" << i << "] no tiene bloque " << exe_index << "\n";
+    if ((*exe_index) [i] >= static_cast<int>(pe_instructions[i].size()) || 
+        pe_instructions[i][(*exe_index) [i]].empty()) {
+      std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index) [i] << "\n";
       all_have_block = false;
     }
   }
 
   if (!all_have_block) {
-    std::cout << " No todos los PEs tienen el bloque " << exe_index << "\n";
-    return;
+    for (int i = 0; i<NUM_PE; i++){
+      std::cout << " No todos los PEs tienen el bloque " << (*exe_index)[i]  << "\n";
+      return;   
+    }   
   }
 
   // Ejecutar los hilos de cada PE en paralelo
   std::vector<std::thread> threads;
   for (int i = 0; i < NUM_PE; i++) {
-    threads.emplace_back([&pe_instructions, &pes, i, exe_index]() {
-      const auto &block = pe_instructions[i][exe_index];
-      std::cout << "[PE" << i << "] ejecutando bloque " << exe_index << ":\n";
-      for (const auto &instr : block) {
-        std::cout << "  [PE" << i << "] " << instr << "\n";
-        (*pes)[i]->execute(instr);
-      }
-    });
+   threads.emplace_back([&pe_instructions, &pes, i, exe_index]() {
+    // 1. Construir el mapa de etiquetas para este PE
+    std::unordered_map<std::string, std::pair<int, int>> label_map;
+
+    for (int u = 0; u < (int)pe_instructions[i].size(); ++u) {
+        for (int v = 0; v < (int)pe_instructions[i][u].size(); ++v) {
+            const std::string& line = pe_instructions[i][u][v];
+            if (!line.empty() && line[0] == '_') {
+                label_map[line] = {u, v};
+            }
+        }
+    }
+
+    // 2. Ejecutar desde exe_index y dentro del bloque
+    int block_index = (*exe_index)[i];
+    int pc = 0;
+
+
+    while (pc < (int)pe_instructions[i][block_index].size()) { //Mientras el pc sea menos al tamanio del bloque
+        const std::string& instr = pe_instructions[i][block_index][pc];
+
+        if (instr.empty() || instr[0] == '_') {
+            pc++;
+            continue;
+        }
+
+        std::istringstream iss(instr);
+        std::string opcode;
+        iss >> opcode;
+
+        if (opcode == "jnz") {
+            std::string label;
+            iss >> label;
+            
+            if ((*pes)[i]->getRegisters()[0] != 0) {  // ejemplo con R1
+                auto it = label_map.find(label);
+                if (it != label_map.end()) {
+                    block_index = it->second.first;
+                    pc = it->second.second;
+                    std::cout << "NO SABEMOS QUE PASA" << block_index << "NO SABEMOS QUE PASA X2 " << pc << std::endl;
+        
+                    continue;  // saltar a la nueva instrucción
+                } else {
+                    std::cerr << "[PE" << i << "]  Etiqueta no encontrada: " << label << std::endl;
+                }
+            }
+        } else {
+            (*pes)[i]->execute(instr);
+        }
+
+        pc++;
+    }
+
+     (*exe_index)[i] = ++ block_index;
+    pc = 0;
+});
   }
 
   // Esperar a que todos terminen
@@ -485,20 +539,22 @@ void run(FileLineSelector *fls, int &exe_index, std::vector<ProcessingElement*> 
     t.join();
   }
 
-  std::cout << "\n=== Estado de los PEs después del bloque " << exe_index << " ===\n";
+  
   for (int i = 0; i < NUM_PE; i++) {
     std::cout << "\n[PE" << i << "]:\n";
     (*pes)[i]->printStatus();
-  }
+    std::cout << "\n=== FIN DE EJECUCIÓN DEL BLOQUE " << (*exe_index)[i] << " ===\n\n";
 
-  std::cout << "\n=== FIN DE EJECUCIÓN DEL BLOQUE " << exe_index << " ===\n\n";
-  exe_index++;
+  } 
+
+  
+ 
 }
 
 // corrige el incremento doble: run() ya incrementa exe_index, así que el callback solo llama a run
 void run_callback(Fl_Widget* widget, void* user_data) {
     RunData* data = static_cast<RunData*>(user_data);
-    run(data->inst, *(data->exe_index), (data->pes));
+    run(data->inst, (data->exe_index), (data->pes));
 }
 
 // ==========================================
@@ -517,11 +573,6 @@ int main() {
     bus->registerSnoopModule(pe->getSnoop());
     pes.push_back(pe);
   }
-
-  pes[0]->mov(0, 45.5);
-  pes[0]->mov(1, 8);
-  pes[0]->store(0, 1);
-  pes[0]->load(2, 1);
 
   Fl_Window *win = new Fl_Window(1000, 800, " Visor de PEs");
   Fl_Tabs *tabs = new Fl_Tabs(10, 10, 980, 700);
@@ -575,7 +626,7 @@ int main() {
   // Botón BreakPoint / RUN
   Fl_Button *btn_run = new Fl_Button(820, 10, 70, 30, "RUN");
   btn_run->color(fl_rgb_color(200, 180, 255));
-  RunData* run_data = new RunData{inst, &exe_index, &pes};
+  RunData* run_data = new RunData{inst,exe_index, &pes};
   btn_run->callback(run_callback, run_data); 
 
   // Botón Reset STEP

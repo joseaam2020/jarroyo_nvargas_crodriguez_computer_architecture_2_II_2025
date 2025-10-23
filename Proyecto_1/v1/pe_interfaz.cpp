@@ -763,6 +763,10 @@ int main() {
 
   Interconnect *bus = new Interconnect(memory);
 
+  ProgramData *data = new ProgramData();
+  data->memory = memory;
+  data->interconnect = bus;
+
   std::vector<ProcessingElement *> pes;
   for (int i = 0; i < NUM_PE; i++) {
     ProcessingElement *pe = new ProcessingElement(i, bus);
@@ -793,6 +797,11 @@ int main() {
     RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
     // Tabla de cache
     CacheTable *cache_tab = new CacheTable(300, 50, 800, 600, pes[pe]);
+
+    // Se guarda en data
+    data->reg_tabs.push_back(reg_tab);
+    data->cache_tabs.push_back(cache_tab);
+
     grp->end();
   }
 
@@ -802,6 +811,7 @@ int main() {
   grp_mem->end();
 
   tabs->end();
+  data->mem_tab = mem_tab; // guardar en ProgramData
 
   // Botón cerrar
   Fl_Button *btn_close = new Fl_Button(850, 660, 120, 40, "Cerrar");
@@ -818,6 +828,7 @@ int main() {
   btn_load_mem->callback(load_memory_cb, mem_data); // Le paso el paquete
 
   RunData *run_data = new RunData{inst, exe_index, pcs, &pes};
+  data->run_data = run_data;
 
   // Botón step (ahora conectado a STEP sincronizado)
   Fl_Button *btn_step = new Fl_Button(760, 10, 50, 30, "Step");
@@ -833,7 +844,7 @@ int main() {
   // Botón Reset STEP
   Fl_Button *btn_reset_step = new Fl_Button(890, 10, 70, 30, "Reset");
   btn_reset_step->color(fl_rgb_color(255, 220, 180));
-  btn_reset_step->callback(reset_callback, nullptr);
+  btn_reset_step->callback(reset_callback, data);
 
   win->end();
   win->show();

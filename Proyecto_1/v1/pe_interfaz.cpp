@@ -2,6 +2,7 @@
 #include "interconnect.h"
 #include "mem.h"
 #include "processing_element.h"
+#include "mesi_state.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_File_Chooser.H>
@@ -19,6 +20,7 @@
 #include <unordered_map>
 #include <vector>
 
+
 #define NUM_PE 4
 #define NUM_REG 8
 #define CACHE_SETS 8
@@ -29,6 +31,8 @@
 
 std::vector<int> *exe_index = new std::vector<int>(NUM_PE);
 std::vector<int> *pcs = new std::vector<int>(NUM_PE);
+
+
 
 // ==========================================
 // Table para Memoria
@@ -145,7 +149,7 @@ public:
   CacheTable(int X, int Y, int W, int H, ProcessingElement *pe)
       : Fl_Table(X, Y, W, H), pe(pe) {
     rows(CACHE_SETS * CACHE_WAYS);
-    cols(4 +
+    cols(5 +
          DATA_PER_CACHE); // Set, Way, Tag, Usage, Data0, Data1, Data2, Data3
     row_header(0);
     col_header(1);
@@ -184,6 +188,9 @@ private:
       case 3:
         fl_draw("Usage", X, Y, W, H, FL_ALIGN_CENTER);
         break;
+      case 4:
+      fl_draw(" MESI ", X, Y, W, H, FL_ALIGN_CENTER);
+        break;
       default:
         fl_draw(("D" + std::to_string(C - 4)).c_str(), X, Y, W, H,
                 FL_ALIGN_CENTER);
@@ -209,6 +216,9 @@ private:
       case 3:
         snprintf(s, sizeof(s), "%d", line.usage_count);
         break;
+      case 4:
+        snprintf(s, sizeof(s), "%s", mesiStateToString(line.state));
+        break;
       default:
         snprintf(s, sizeof(s), "%.2f", line.data[C - 4]);
         break;
@@ -221,6 +231,12 @@ private:
       break;
     }
   }
+};
+
+// Estructura para pasar la memoria y la tabla
+struct MemoryData{
+  MemoryTable* mem_tab;
+  Memory* memory;
 };
 
 struct RunData {
@@ -497,7 +513,9 @@ void step_callback(Fl_Widget *widget, void *user_data) {
 void on_close(Fl_Widget *, void *) { exit(0); }
 
 void load_memory_cb(Fl_Widget *w, void *data) {
-  MemoryTable *mem_tab = static_cast<MemoryTable *>(data);
+  MemoryData *mem_data = static_cast<MemoryData*>(data);
+  MemoryTable *mem_tab = mem_data->mem_tab;
+  Memory *memory = mem_data->memory;
 
   const char *filename =
       fl_file_chooser("Seleccionar archivo de memoria", "*.txt", nullptr);
@@ -510,7 +528,8 @@ void load_memory_cb(Fl_Widget *w, void *data) {
     return;
   }
 
-  std::vector<std::vector<double>> mem_data;
+  // Vector para los valores leídos
+  std::vector<std::vector<double>> mem_values; 
   std::string line;
   while (std::getline(file, line)) {
     std::vector<double> row;
@@ -524,11 +543,21 @@ void load_memory_cb(Fl_Widget *w, void *data) {
       } else
         break;
     }
-    mem_data.push_back(row);
+    if (!row.empty())
+      mem_values.push_back(row); // Se agrega la fila completa al vector principal
   }
 
   file.close();
-  mem_tab->set_memory(mem_data);
+  mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores leídos
+
+  // Llenar la memoria real
+  int address = 0; // Dirección inicial
+  for (const auto &row : mem_values){
+    for (double val : row){
+      memory->initialize(address, val); // Escribe el valor en memoria real
+      address +=8; // Avanza 8 bytes 
+    }
+  }
   std::cout << "Memoria cargada: " << filename << std::endl;
 }
 
@@ -743,15 +772,15 @@ int main() {
     pes.push_back(pe);
   }
 
-  Fl_Window *win = new Fl_Window(1000, 800, " Visor de PEs");
-  Fl_Tabs *tabs = new Fl_Tabs(10, 10, 980, 700);
+  Fl_Window *win = new Fl_Window(1190, 800, " Visor de PEs");
+  Fl_Tabs *tabs = new Fl_Tabs(10, 10, 1150, 700);
 
   // Tab de instrucciones / FileLineSelector
-  Fl_Group *grp = new Fl_Group(10, 40, 980, 610, "Instrucciones");
+  Fl_Group *grp = new Fl_Group(10, 40, 1050, 610, "Instrucciones");
   grp->color(fl_rgb_color(245, 240, 255));
 
   grp->box(FL_EMBOSSED_BOX);
-  FileLineSelector *inst = new FileLineSelector(20, 50, 940, 540, win);
+  FileLineSelector *inst = new FileLineSelector(20, 50, 990, 540, win);
   grp->end();
 
   // Tabs para PEs
@@ -765,7 +794,7 @@ int main() {
     // Tabla de registros
     RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
     // Tabla de cache
-    CacheTable *cache_tab = new CacheTable(300, 50, 700, 600, pes[pe]);
+    CacheTable *cache_tab = new CacheTable(300, 50, 800, 600, pes[pe]);
     grp->end();
   }
 
@@ -781,10 +810,14 @@ int main() {
   btn_close->color(fl_rgb_color(255, 180, 180));
   btn_close->callback(on_close);
 
-  // Botón cargar memoria
+  // Objeto MemoryData, inicializando los punteros mem_tab y memory 
+  // Empaqueta los punteros para que el callback tenga acceso a eĺ
+  MemoryData* mem_data = new MemoryData{mem_tab, memory};
+  
+  // Botón cargar memoria ***
   Fl_Button *btn_load_mem = new Fl_Button(700, 660, 120, 40, "Cargar Memoria");
   btn_load_mem->color(fl_rgb_color(180, 255, 180));
-  btn_load_mem->callback(load_memory_cb, mem_tab);
+  btn_load_mem->callback(load_memory_cb, mem_data); // Le paso el paquete
 
   RunData *run_data = new RunData{inst, exe_index, pcs, &pes};
 

@@ -1,4 +1,5 @@
 #include "file_line_selector.h"
+#include "cache.h"
 #include "interconnect.h"
 #include "mem.h"
 #include "mesi_state.h"
@@ -154,6 +155,7 @@ public:
     end();
   }
 
+
   void setProcessingElement(ProcessingElement *pe) {
     this->pe = pe;
     redraw();
@@ -186,8 +188,7 @@ private:
         fl_draw("Usage", X, Y, W, H, FL_ALIGN_CENTER);
         break;
       case 4:
-        fl_draw(" MESI ", X, Y, W, H, FL_ALIGN_CENTER);
-        break;
+       
       default:
         fl_draw(("D" + std::to_string(C - 5)).c_str(), X, Y, W, H,
                 FL_ALIGN_CENTER);
@@ -195,6 +196,8 @@ private:
       }
       fl_pop_clip();
       break;
+
+
     case CONTEXT_CELL:
       fl_push_clip(X, Y, W, H);
       fl_color(FL_WHITE);
@@ -230,6 +233,124 @@ private:
   }
 };
 
+// ==========================================
+// Table para Estadísticas de Cache
+// ==========================================
+class CacheStatsTable : public Fl_Table {
+  ProcessingElement *pe;
+
+public:
+  CacheStatsTable(int X, int Y, int W, int H, ProcessingElement *pe)
+      : Fl_Table(X, Y, W, H), pe(pe) {
+    rows(6);       // 6 filas de estadísticas
+    cols(2);       // Nombre y Valor
+    row_header(0); // Sin header de filas
+    col_header(1); // CON header de columnas (esto es clave)
+    col_resize(1);
+    col_width(0, 180);
+    col_width(1, 140);
+    row_height_all(35);
+    end();
+  }
+
+  void setProcessingElement(ProcessingElement *pe) {
+    this->pe = pe;
+    redraw();
+  }
+
+private:
+  void draw_cell(TableContext context, int R, int C, int X, int Y, int W,
+                 int H) override {
+    char s[100];
+    
+    switch (context) {
+    case CONTEXT_COL_HEADER:
+      // Dibujar el header de las columnas (igual que CacheTable)
+      fl_push_clip(X, Y, W, H);
+      fl_draw_box(FL_FLAT_BOX, X, Y, W, H, fl_rgb_color(200, 200, 200));
+      fl_color(FL_BLACK);
+      fl_font(FL_HELVETICA_BOLD, 12);
+      
+      if (C == 0) {
+        fl_draw("Métrica", X, Y, W, H, FL_ALIGN_CENTER);
+      } else {
+        fl_draw("Valor", X, Y, W, H, FL_ALIGN_CENTER);
+      }
+      
+      fl_pop_clip();
+      break;
+      
+    case CONTEXT_CELL:
+      fl_push_clip(X, Y, W, H);
+      
+      // Color de fondo blanco (como CacheTable)
+      fl_color(FL_WHITE);
+      fl_rectf(X, Y, W, H);
+      
+      fl_color(FL_BLACK);
+      fl_rect(X, Y, W, H);
+      
+      if (C == 0) {
+        // Columna de nombres de métricas
+        fl_font(FL_HELVETICA, 12);
+        switch (R) {
+        case 0:
+          snprintf(s, sizeof(s), "Cache Misses");
+          break;
+        case 1:
+          snprintf(s, sizeof(s), "Cache Hits");
+          break;
+        case 2:
+          snprintf(s, sizeof(s), "Lecturas");
+          break;
+        case 3:
+          snprintf(s, sizeof(s), "Escrituras");
+          break;
+        case 4:
+          snprintf(s, sizeof(s), "Invalidaciones");
+          break;
+        case 5:
+          snprintf(s, sizeof(s), "Trafico Bus");
+          break;
+        }
+      } else {
+        // Columna de valores
+        fl_font(FL_HELVETICA, 12);
+        CacheStats stats = pe->getCache()->getStats();
+        switch (R) {
+        case 0:
+          snprintf(s, sizeof(s), "%d", stats.cache_misses);
+          break;
+        case 1:
+          snprintf(s, sizeof(s), "%d", stats.cache_hits);
+          break;
+        case 2:
+          snprintf(s, sizeof(s), "%d", stats.reads);
+          break;
+        case 3:
+          snprintf(s, sizeof(s), "%d", stats.writes);
+          break;
+        case 4:
+          snprintf(s, sizeof(s), "%d", stats.invalidations);
+          break;
+        case 5:
+          snprintf(s, sizeof(s), "%d", stats.bus_traffic);
+          break;
+        }
+      }
+      
+      fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
+      fl_pop_clip();
+      break;
+      
+    default:
+      break;
+    }
+  }
+};
+
+
+
 // Estructura para pasar la memoria y la tabla
 struct MemoryData {
   MemoryTable *mem_tab;
@@ -250,6 +371,7 @@ struct ProgramData {
   MemoryTable *mem_tab;
   std::vector<RegTable *> reg_tabs;
   std::vector<CacheTable *> cache_tabs;
+  std::vector<CacheStatsTable *> stats_tabs; 
 };
 
 // ========================================
@@ -502,6 +624,13 @@ void step(FileLineSelector *fls, std::vector<int> *exe_index,
 void step_callback(Fl_Widget *widget, void *user_data) {
   RunData *data = static_cast<RunData *>(user_data);
   step(data->inst, (data->exe_index), (data->pcs), (data->pes));
+
+  ProgramData *prog = static_cast<ProgramData *>(widget->parent()->user_data());
+  for (auto *tab : prog->stats_tabs)
+    tab->redraw();
+  for (auto *tab : prog->cache_tabs)
+    tab->redraw();
+
 }
 
 // ==========================================
@@ -744,6 +873,7 @@ void reset_callback(Fl_Widget *widget, void *user_data) {
   for (int i = 0; i < NUM_PE; i++) {
     ctx->reg_tabs[i]->setProcessingElement((*(rd->pes))[i]);
     ctx->cache_tabs[i]->setProcessingElement((*(rd->pes))[i]);
+    ctx->stats_tabs[i]->setProcessingElement((*(rd->pes))[i]);
   }
 
   // --- 4. Resetear contadores de ejecución ---
@@ -794,13 +924,22 @@ int main() {
     grp->color(fl_rgb_color(240, 245, 255));
 
     // Tabla de registros
-    RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
+    RegTable *reg_tab = new RegTable(20, 50, 300, 270, pes[pe]);
+
+
+
+    //Tabla de stats de PE
+    CacheStatsTable *stats_tab = new CacheStatsTable(20, 330, 350, 220, pes[pe]);
+
+
     // Tabla de cache
-    CacheTable *cache_tab = new CacheTable(300, 50, 800, 600, pes[pe]);
+    CacheTable *cache_tab = new CacheTable(380, 50, 780, 580, pes[pe]);
+
 
     // Se guarda en data
     data->reg_tabs.push_back(reg_tab);
     data->cache_tabs.push_back(cache_tab);
+    data->stats_tabs.push_back(stats_tab);
 
     grp->end();
   }

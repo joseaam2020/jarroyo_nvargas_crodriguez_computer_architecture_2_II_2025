@@ -71,9 +71,9 @@ void SnoopModule::handleBusInvalidate(int address) {
     std::cout << "  [PE" << pe_id << " Snoop] Invalidate signal -> "
               << "INVALIDATE line" << std::endl;
     *state = mesi_state::INVALID; // la invalida
+    cache->incrementInvalidations();
   }
 }
-
 // Parte de Interconnect
 
 /**

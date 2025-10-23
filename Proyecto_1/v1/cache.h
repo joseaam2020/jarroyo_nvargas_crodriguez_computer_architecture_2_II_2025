@@ -23,6 +23,16 @@ struct CacheLine {
   CacheLine(int tag) : tag(tag), usage_count(1) {}
 };
 
+struct CacheStats {
+  int cache_misses = 0;
+  int cache_hits = 0;
+  int reads = 0;
+  int writes = 0;
+  int invalidations = 0;
+  int bus_traffic = 0;
+};
+
+
 class Cache {
 private:
   int pe_id;
@@ -32,6 +42,7 @@ private:
   static constexpr int num_ways = 2;
 
   std::vector<std::vector<CacheLine>> sets;
+  CacheStats stats;
 
 public:
   Cache(int id);
@@ -55,6 +66,20 @@ public:
   const std::vector<std::vector<CacheLine>> &getSets() const { return sets; }
 
   void flush();
+
+    CacheStats getStats() const { return stats; }
+  
+  void incrementMisses() { stats.cache_misses++; }
+  void incrementHits() { stats.cache_hits++; }
+  void incrementReads() { stats.reads++; }
+  void incrementWrites() { stats.writes++; }
+  void incrementInvalidations() { stats.invalidations++; }
+  void incrementBusTraffic() { stats.bus_traffic++; }
+  
+  void resetStats() { stats = CacheStats(); }
+
+
+
 };
 
 #endif

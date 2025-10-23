@@ -36,8 +36,14 @@ public:
 
   int getPEId() const { return pe_id; }
   SnoopModule *getSnoop() { return snoop; }
+  
+  
 
   void printStatus() const;
+
+
+
+
 };
 
 #endif

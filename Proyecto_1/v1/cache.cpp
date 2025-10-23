@@ -13,17 +13,25 @@ double Cache::getData(int addr) {
   // 1. Verificar alineación
   if (addr % 8 != 0) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
-  }
 
+    
+
+  }
+  stats.reads++;
   CacheLine *line = this->getLine(addr); // Buscar en Cache
 
   if (line &&
       line->state != mesi_state::INVALID) { // Si se encuentra retornar valor en
-                                            // cache y es valida
+    stats.cache_hits++;                                        // cache y es valida
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     return line->data[offset];
   } else { // Sino
+
+    stats.cache_misses++;
+    stats.bus_traffic++;
+
+
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -79,15 +87,19 @@ void Cache::setData(int addr, double value) {
   // 1. Verificar alineación
   if (addr % 8 != 0) {
     throw std::runtime_error("Error: 'addr' no es múltiplo de 8.");
+
+    
   }
 
+    stats.writes++;
   CacheLine *verified_line = this->getLine(addr);
   CacheLine line = this->snoop->handleWrite(addr, value);
 
   // printf("ESTADO LINEA: %s", mesiStateToString(line.state));
 
   if (!(line.state == mesi_state::INVALID)) { // Si la linea no es invalida
-
+    stats.cache_misses++;
+   
     int word_index = addr / 8;
     int offset = word_index % 4; // posición en el bloque (0 a 3)
     int block_number = word_index / 4;
@@ -109,6 +121,7 @@ void Cache::setData(int addr, double value) {
 
     if (verified_line) {
       if (verified_line->state == mesi_state::INVALID) {
+        
         verified_line->state = line.state;
         verified_line->usage_count++;
         for (short i = 0; i < 4; i++) {
@@ -121,10 +134,12 @@ void Cache::setData(int addr, double value) {
       line.usage_count = 1;
 
       sets[index][lfu_way] = line;
+      
 
       // Actualizar memoria si tag diferente de -1 y linea valida;
       int base_index = word_index - offset;
       if (old_line.tag != -1 && old_line.state != mesi_state::INVALID) {
+       
         for (short i = 0; i < 4; i++) {
           snoop->writeToMem((base_index + i) * 8, old_line.data[i]);
         }
@@ -134,6 +149,7 @@ void Cache::setData(int addr, double value) {
 
   // Nota: en caso de que la linea sea invalida, el Snoop actualiza el valor de
   // la cache
+  stats.cache_hits++;
 }
 
 void Cache::printCache() const {
@@ -192,6 +208,7 @@ void Cache::flush() {
       const CacheLine &line = set[current_way];
 
       if (line.state != mesi_state::INVALID) {
+        stats.bus_traffic++;
         short block_number = (line.tag << 3) | current_set;
 
         for (short offset = 0; offset < 4; offset++) {

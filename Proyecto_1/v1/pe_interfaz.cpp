@@ -15,10 +15,9 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 #include <thread>
 #include <unordered_map>
-
+#include <vector>
 
 #define NUM_PE 4
 #define NUM_REG 8
@@ -28,8 +27,8 @@
 #define BLOCKS 128
 #define ADDRS_PER_BLOCK 4
 
-
-std::vector <int>*exe_index = new std::vector<int>(NUM_PE);
+std::vector<int> *exe_index = new std::vector<int>(NUM_PE);
+std::vector<int> *pcs = new std::vector<int>(NUM_PE);
 
 // ==========================================
 // Table para Memoria
@@ -100,6 +99,11 @@ public:
     end();
   }
 
+  void setProcessingElement(ProcessingElement *pe) {
+    this->pe = pe;
+    redraw();
+  }
+
 private:
   void draw_cell(TableContext context, int R, int C, int X, int Y, int W,
                  int H) override {
@@ -147,6 +151,11 @@ public:
     col_header(1);
     col_resize(1);
     end();
+  }
+
+  void setProcessingElement(ProcessingElement *pe) {
+    this->pe = pe;
+    redraw();
   }
 
 private:
@@ -215,9 +224,19 @@ private:
 };
 
 struct RunData {
-    FileLineSelector* inst;
-    std::vector<int> *exe_index;
-    std::vector<ProcessingElement*>* pes;
+  FileLineSelector *inst;
+  std::vector<int> *exe_index;
+  std::vector<int> *pcs;
+  std::vector<ProcessingElement *> *pes;
+};
+
+struct ProgramData {
+  struct RunData *run_data;
+  Memory *memory;
+  Interconnect *interconnect;
+  MemoryTable *mem_tab;
+  std::vector<RegTable *> reg_tabs;
+  std::vector<CacheTable *> cache_tabs;
 };
 
 // ========================================
@@ -225,138 +244,251 @@ struct RunData {
 // Ejecuta la misma instrucción (índice) en todos los PEs al mismo tiempo
 // ========================================
 struct StepState {
-    std::vector<std::vector<std::vector<std::string>>> pe_instructions; // [PE][bloque][instr]
-    int global_block;       // bloque actual común
-    int global_instr;       // índice de instrucción dentro del bloque
-    bool initialized;
+  std::vector<std::vector<std::vector<std::string>>>
+      pe_instructions; // [PE][bloque][instr]
+  int global_block;    // bloque actual común
+  int global_instr;    // índice de instrucción dentro del bloque
+  bool initialized;
 
-    StepState() : global_block(0), global_instr(0), initialized(false) {
-        pe_instructions.resize(NUM_PE);
-    }
+  StepState() : global_block(0), global_instr(0), initialized(false) {
+    pe_instructions.resize(NUM_PE);
+  }
 };
 
 struct StepData {
-    FileLineSelector* inst;
-    std::vector<ProcessingElement*>* pes;
+  FileLineSelector *inst;
+  std::vector<ProcessingElement *> *pes;
 };
 
 StepState g_step_state;
 
-void parse_instructions_for_step(FileLineSelector *fls, StepState* state) {
-    state->pe_instructions.clear();
-    state->pe_instructions.resize(NUM_PE);
+void parse_instructions_for_step(FileLineSelector *fls, StepState *state) {
+  state->pe_instructions.clear();
+  state->pe_instructions.resize(NUM_PE);
 
-    int current_pe = -1;
-    std::vector<std::string> file_lines = fls->get_file_lines();
+  int current_pe = -1;
+  std::vector<std::string> file_lines = fls->get_file_lines();
 
-    for (const auto &line : file_lines) {
-        if (line.rfind(".PE", 0) == 0) {
-            // formato .PE#
-            current_pe = std::stoi(line.substr(3));
-            if (current_pe >= 0 && current_pe < NUM_PE) {
-                state->pe_instructions[current_pe].push_back({});
-            }
-        } else if (current_pe != -1 && current_pe >= 0 && current_pe < NUM_PE) {
-            if (line == "#BREAKPOINT") {
-                state->pe_instructions[current_pe].push_back({});
-            } else {
-                if (state->pe_instructions[current_pe].empty()) {
-                    state->pe_instructions[current_pe].push_back({});
-                }
-                state->pe_instructions[current_pe].back().push_back(line);
-            }
+  for (const auto &line : file_lines) {
+    if (line.rfind(".PE", 0) == 0) {
+      // formato .PE#
+      current_pe = std::stoi(line.substr(3));
+      if (current_pe >= 0 && current_pe < NUM_PE) {
+        state->pe_instructions[current_pe].push_back({});
+      }
+    } else if (current_pe != -1 && current_pe >= 0 && current_pe < NUM_PE) {
+      if (line == "#BREAKPOINT") {
+        state->pe_instructions[current_pe].push_back({});
+      } else {
+        if (state->pe_instructions[current_pe].empty()) {
+          state->pe_instructions[current_pe].push_back({});
         }
+        state->pe_instructions[current_pe].back().push_back(line);
+      }
     }
+  }
 
-    state->global_block = 0;
-    state->global_instr = 0;
-    state->initialized = true;
+  state->global_block = 0;
+  state->global_instr = 0;
+  state->initialized = true;
 
-    std::cout << "\n🔧 Instrucciones parseadas para STEP:\n";
-    for (int i = 0; i < NUM_PE; ++i) {
-        std::cout << "  PE" << i << ": " << state->pe_instructions[i].size() << " bloques\n";
-    }
-    std::cout << std::endl;
+  std::cout << "\n🔧 Instrucciones parseadas para STEP:\n";
+  for (int i = 0; i < NUM_PE; ++i) {
+    std::cout << "  PE" << i << ": " << state->pe_instructions[i].size()
+              << " bloques\n";
+  }
+  std::cout << std::endl;
 }
 //
-void step(StepData* data) {
-    StepState* state = &g_step_state;
+/*
+void step(StepData *data) {
+  StepState *state = &g_step_state;
 
-    if (!state->initialized) {
-        parse_instructions_for_step(data->inst, state);
+  if (!state->initialized) {
+    parse_instructions_for_step(data->inst, state);
+  }
+
+  bool hayTrabajo = false;
+  std::vector<std::thread> threads;
+
+  std::cout << "\n STEP sincronizado: Bloque " << state->global_block
+            << ", Instrucción " << state->global_instr << "\n";
+  std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+
+  for (int pe = 0; pe < NUM_PE; ++pe) {
+    auto &bloques = state->pe_instructions[pe];
+
+    // Si el PE no tiene ese bloque, se salta
+    if (state->global_block >= (int)bloques.size())
+      continue;
+
+    auto &instrucciones = bloques[state->global_block];
+
+    // Si el PE no tiene esa instrucción indexada, se salta
+    if (state->global_instr >= (int)instrucciones.size())
+      continue;
+
+    hayTrabajo = true;
+    std::string instr = instrucciones[state->global_instr];
+
+    std::cout << "▶️ [PE" << pe << "] ejecutando: " << instr << std::endl;
+
+    // Ejecutar en paralelo por PE
+    threads.emplace_back(
+        [pe, instr, data]() { (*(data->pes))[pe]->execute(instr); });
+  }
+
+  // esperar
+  for (auto &t : threads)
+    t.join();
+
+  if (!hayTrabajo) {
+    std::cout << "✅ No hay más instrucciones pendientes en ninguno de los PEs "
+                 "(STEP terminó).\n";
+    return;
+  }
+
+  // avanzar índice dentro del bloque
+  state->global_instr++;
+
+  // comprobar si ya no hay instrucciones en este bloque para ninguno (entonces
+  // avanzar bloque)
+  bool anyRemainingInBlock = false;
+  for (int pe = 0; pe < NUM_PE; ++pe) {
+    auto &bloques = state->pe_instructions[pe];
+    if (state->global_block < (int)bloques.size()) {
+      if (state->global_instr < (int)bloques[state->global_block].size()) {
+        anyRemainingInBlock = true;
+        break;
+      }
     }
+  }
 
-    bool hayTrabajo = false;
-    std::vector<std::thread> threads;
+  if (!anyRemainingInBlock) {
+    // avanzar a siguiente bloque global
+    state->global_block++;
+    state->global_instr = 0;
+    std::cout << "🔁 Avanzando a bloque global " << state->global_block << "\n";
+  }
+}
 
-    std::cout << "\n STEP sincronizado: Bloque " << state->global_block
-              << ", Instrucción " << state->global_instr << "\n";
-    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+void step_callback(Fl_Widget *widget, void *user_data) {
+  StepData *data = static_cast<StepData *>(user_data);
+  step(data);
+}
 
-    for (int pe = 0; pe < NUM_PE; ++pe) {
-        auto &bloques = state->pe_instructions[pe];
+void reset_step_callback(Fl_Widget *widget, void *user_data) {
+  (void)user_data;
+  g_step_state.global_block = 0;
+  g_step_state.global_instr = 0;
+  g_step_state.initialized = false;
+  std::cout << "\n🔄 STEP reiniciado: Bloque 0, Instrucción 0 (re-parse al "
+               "siguiente STEP)\n\n";
+}*/
 
-        // Si el PE no tiene ese bloque, se salta
-        if (state->global_block >= (int)bloques.size()) continue;
+void step(FileLineSelector *fls, std::vector<int> *exe_index,
+          std::vector<int> *pcs, std::vector<ProcessingElement *> *pes) {
 
-        auto &instrucciones = bloques[state->global_block];
+  std::vector<std::vector<std::vector<std::string>>> pe_instructions(NUM_PE);
+  int current_pe = -1;
 
-        // Si el PE no tiene esa instrucción indexada, se salta
-        if (state->global_instr >= (int)instrucciones.size()) continue;
+  std::vector<std::string> file_lines = fls->get_file_lines();
 
-        hayTrabajo = true;
-        std::string instr = instrucciones[state->global_instr];
-
-        std::cout << "▶️ [PE" << pe << "] ejecutando: " << instr << std::endl;
-
-        // Ejecutar en paralelo por PE
-        threads.emplace_back([pe, instr, data]() {
-            (*(data->pes))[pe]->execute(instr);
-        });
+  // Formar bloques segun los breaks
+  for (const auto &line : file_lines) {
+    if (line.rfind(".PE", 0) == 0) {
+      current_pe = std::stoi(line.substr(3));
+      if (current_pe >= 0 && current_pe < NUM_PE)
+        pe_instructions[current_pe].push_back({});
+    } else if (current_pe != -1 && current_pe >= 0 && current_pe < NUM_PE) {
+      if (line == "#BREAKPOINT")
+        pe_instructions[current_pe].push_back({});
+      else {
+        if (pe_instructions[current_pe].empty())
+          pe_instructions[current_pe].push_back({});
+        pe_instructions[current_pe].back().push_back(line);
+      }
     }
+  }
 
-    // esperar
-    for (auto &t : threads) t.join();
+  // Verificar bloques válidos
+  for (int i = 0; i < NUM_PE; i++) {
+    if ((*exe_index)[i] >= (int)pe_instructions[i].size()) {
+      std::cout << "[PE" << i << "] No tiene bloque válido\n";
+      return;
+    }
+  }
 
-    if (!hayTrabajo) {
-        std::cout << "✅ No hay más instrucciones pendientes en ninguno de los PEs (STEP terminó).\n";
+  // Ejecutar un paso por PE (en paralelo)
+  std::vector<std::thread> threads;
+  for (int i = 0; i < NUM_PE; i++) {
+    threads.emplace_back([&, i]() {
+      int block_index = (*exe_index)[i];
+
+      // Evitar acceso fuera de rango
+      if ((*pcs)[i] >= (int)pe_instructions[i][block_index].size()) {
+        std::cout << "[PE" << i << "] Fin del bloque " << block_index << "\n";
+        (*exe_index)[i]++;
+        (*pcs)[i] = 0;
         return;
-    }
+      }
 
-    // avanzar índice dentro del bloque
-    state->global_instr++;
+      // Mapa de etiquetas
+      std::unordered_map<std::string, std::pair<int, int>> label_map;
+      for (int u = 0; u < (int)pe_instructions[i].size(); ++u)
+        for (int v = 0; v < (int)pe_instructions[i][u].size(); ++v)
+          if (!pe_instructions[i][u][v].empty() &&
+              pe_instructions[i][u][v][0] == '_')
+            label_map[pe_instructions[i][u][v]] = {u, v};
 
-    // comprobar si ya no hay instrucciones en este bloque para ninguno (entonces avanzar bloque)
-    bool anyRemainingInBlock = false;
-    for (int pe = 0; pe < NUM_PE; ++pe) {
-        auto &bloques = state->pe_instructions[pe];
-        if (state->global_block < (int)bloques.size()) {
-            if (state->global_instr < (int)bloques[state->global_block].size()) {
-                anyRemainingInBlock = true;
-                break;
-            }
+      const std::string &instr = pe_instructions[i][block_index][(*pcs)[i]];
+
+      if (instr.empty() || instr[0] == '_') {
+        (*pcs)[i]++;
+        return;
+      }
+
+      std::istringstream iss(instr);
+      std::string opcode;
+      iss >> opcode;
+
+      if (opcode == "jnz") {
+        std::string label;
+        iss >> label;
+        if ((*pes)[i]->getRegisters()[0] != 0) {
+          auto it = label_map.find(label);
+          if (it != label_map.end()) {
+            (*exe_index)[i] = it->second.first;
+            (*pcs)[i] = it->second.second;
+            std::cout << "[PE" << i << "] Salto a " << label << " (bloque "
+                      << (*exe_index)[i] << ", pc " << (*pcs)[i] << ")\n";
+            return;
+          } else {
+            std::cerr << "[PE" << i << "] Etiqueta no encontrada: " << label
+                      << "\n";
+          }
         }
-    }
+      } else {
+        (*pes)[i]->execute(instr);
+      }
 
-    if (!anyRemainingInBlock) {
-        // avanzar a siguiente bloque global
-        state->global_block++;
-        state->global_instr = 0;
-        std::cout << "🔁 Avanzando a bloque global " << state->global_block << "\n";
-    }
-}
+      (*pcs)[i]++;
+    });
+  }
 
-void step_callback(Fl_Widget* widget, void* user_data) {
-    StepData* data = static_cast<StepData*>(user_data);
-    step(data);
-}
+  for (auto &t : threads)
+    t.join();
 
-void reset_step_callback(Fl_Widget* widget, void* user_data) {
-    (void) user_data;
-    g_step_state.global_block = 0;
-    g_step_state.global_instr = 0;
-    g_step_state.initialized = false;
-    std::cout << "\n🔄 STEP reiniciado: Bloque 0, Instrucción 0 (re-parse al siguiente STEP)\n\n";
+  for (int i = 0; i < NUM_PE; i++) {
+    std::cout << "\n[PE" << i << "] Step ejecutado. PC=" << (*pcs)[i]
+              << ", Bloque=" << (*exe_index)[i] << "\n";
+    (*pes)[i]->printStatus();
+  }
+};
+
+void step_callback(Fl_Widget *widget, void *user_data) {
+  RunData *data = static_cast<RunData *>(user_data);
+  step(data->inst, (data->exe_index), (data->pcs), (data->pes));
 }
 
 // ==========================================
@@ -408,18 +540,21 @@ void load_instructions_cb(Fl_Widget *w, void *data) {
   // Mostrar confirmación
   std::cout << "Instrucciones cargadas exitosamente!" << std::endl;
 
-  // Al recargar instrucciones reiniciamos el estado de STEP para que se re-parseen
+  // Al recargar instrucciones reiniciamos el estado de STEP para que se
+  // re-parseen
   g_step_state.initialized = false;
 }
 
-void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<ProcessingElement*> *pes) {
+void run(FileLineSelector *fls, std::vector<int> *exe_index,
+         std::vector<int> *pcs, std::vector<ProcessingElement *> *pes) {
   std::vector<std::vector<std::vector<std::string>>> pe_instructions(NUM_PE);
   int current_pe = -1;
 
-  std::vector<std::string> file_lines = fls->get_file_lines(); // ← Necesitas get_file_lines() completo
-  
+  std::vector<std::string> file_lines =
+      fls->get_file_lines(); // ← Necesitas get_file_lines() completo
+
   for (const auto &line : file_lines) {
-    if (line.rfind(".PE", 0) == 0) { // Si empieza con ".PE"
+    if (line.rfind(".PE", 0) == 0) {          // Si empieza con ".PE"
       current_pe = std::stoi(line.substr(3)); // Obtener el número de PE
       if (current_pe >= 0 && current_pe < NUM_PE) {
         pe_instructions[current_pe].push_back({}); // Crear el primer bloque
@@ -436,14 +571,13 @@ void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<Proces
         pe_instructions[current_pe].back().push_back(line);
       }
     }
-    
-   
   }
 
   // Print para verificar
   for (int i = 0; i < NUM_PE; i++) {
     std::cout << "\n=== PE" << i << " ===\n";
-    std::cout << "[PE_LINE] " << i << " (*exe_index)[i]=" << (*exe_index)[i] << "\n";
+    std::cout << "[PE_LINE] " << i << " (*exe_index)[i]=" << (*exe_index)[i]
+              << "\n";
     for (size_t b = 0; b < pe_instructions[i].size(); ++b) {
       if (pe_instructions[i][b].empty())
         continue;
@@ -455,51 +589,52 @@ void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<Proces
   }
 
   // Verificar que exe_index sea válido para todos los PEs
-  
-  
+
   bool all_have_block = true;
   for (int i = 0; i < NUM_PE; i++) {
-    if ((*exe_index) [i] >= static_cast<int>(pe_instructions[i].size()) || 
-        pe_instructions[i][(*exe_index) [i]].empty()) {
-      std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index) [i] << "\n";
+    if ((*exe_index)[i] >= static_cast<int>(pe_instructions[i].size()) ||
+        pe_instructions[i][(*exe_index)[i]].empty()) {
+      std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index)[i]
+                << "\n";
       all_have_block = false;
     }
   }
 
   if (!all_have_block) {
-    for (int i = 0; i<NUM_PE; i++){
-      std::cout << " No todos los PEs tienen el bloque " << (*exe_index)[i]  << "\n";
-      return;   
-    }   
+    for (int i = 0; i < NUM_PE; i++) {
+      std::cout << " No todos los PEs tienen el bloque " << (*exe_index)[i]
+                << "\n";
+      return;
+    }
   }
 
   // Ejecutar los hilos de cada PE en paralelo
   std::vector<std::thread> threads;
   for (int i = 0; i < NUM_PE; i++) {
-   threads.emplace_back([&pe_instructions, &pes, i, exe_index]() {
-    // 1. Construir el mapa de etiquetas para este PE
-    std::unordered_map<std::string, std::pair<int, int>> label_map;
+    threads.emplace_back([&pe_instructions, &pes, i, exe_index, pcs]() {
+      // 1. Construir el mapa de etiquetas para este PE
+      std::unordered_map<std::string, std::pair<int, int>> label_map;
 
-    for (int u = 0; u < (int)pe_instructions[i].size(); ++u) {
+      for (int u = 0; u < (int)pe_instructions[i].size(); ++u) {
         for (int v = 0; v < (int)pe_instructions[i][u].size(); ++v) {
-            const std::string& line = pe_instructions[i][u][v];
-            if (!line.empty() && line[0] == '_') {
-                label_map[line] = {u, v};
-            }
+          const std::string &line = pe_instructions[i][u][v];
+          if (!line.empty() && line[0] == '_') {
+            label_map[line] = {u, v};
+          }
         }
-    }
+      }
 
-    // 2. Ejecutar desde exe_index y dentro del bloque
-    int block_index = (*exe_index)[i];
-    int pc = 0;
+      // 2. Ejecutar desde exe_index y dentro del bloque
+      int block_index = (*exe_index)[i];
 
-
-    while (pc < (int)pe_instructions[i][block_index].size()) { //Mientras el pc sea menos al tamanio del bloque
-        const std::string& instr = pe_instructions[i][block_index][pc];
+      while ((*pcs)[i] <
+             (int)pe_instructions[i][block_index]
+                 .size()) { // Mientras el pc sea menos al tamanio del bloque
+        const std::string &instr = pe_instructions[i][block_index][(*pcs)[i]];
 
         if (instr.empty() || instr[0] == '_') {
-            pc++;
-            continue;
+          (*pcs)[i]++;
+          continue;
         }
 
         std::istringstream iss(instr);
@@ -507,31 +642,33 @@ void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<Proces
         iss >> opcode;
 
         if (opcode == "jnz") {
-            std::string label;
-            iss >> label;
-            
-            if ((*pes)[i]->getRegisters()[0] != 0) {  // ejemplo con R1
-                auto it = label_map.find(label);
-                if (it != label_map.end()) {
-                    block_index = it->second.first;
-                    pc = it->second.second;
-                    std::cout << "NO SABEMOS QUE PASA" << block_index << "NO SABEMOS QUE PASA X2 " << pc << std::endl;
-        
-                    continue;  // saltar a la nueva instrucción
-                } else {
-                    std::cerr << "[PE" << i << "]  Etiqueta no encontrada: " << label << std::endl;
-                }
+          std::string label;
+          iss >> label;
+
+          if ((*pes)[i]->getRegisters()[0] != 0) { // ejemplo con R1
+            auto it = label_map.find(label);
+            if (it != label_map.end()) {
+              block_index = it->second.first;
+              (*pcs)[i] = it->second.second;
+              std::cout << "Salto a Bloque: " << block_index
+                        << ", Pc: " << (*pcs)[i] << std::endl;
+
+              continue; // saltar a la nueva instrucción
+            } else {
+              std::cerr << "[PE" << i << "]  Etiqueta no encontrada: " << label
+                        << std::endl;
             }
+          }
         } else {
-            (*pes)[i]->execute(instr);
+          (*pes)[i]->execute(instr);
         }
 
-        pc++;
-    }
+        (*pcs)[i]++;
+      }
 
-     (*exe_index)[i] = ++ block_index;
-    pc = 0;
-});
+      (*exe_index)[i] = ++block_index;
+      (*pcs)[i] = 0;
+    });
   }
 
   // Esperar a que todos terminen
@@ -539,22 +676,54 @@ void run(FileLineSelector *fls, std::vector <int> *exe_index, std::vector<Proces
     t.join();
   }
 
-  
   for (int i = 0; i < NUM_PE; i++) {
     std::cout << "\n[PE" << i << "]:\n";
     (*pes)[i]->printStatus();
-    std::cout << "\n=== FIN DE EJECUCIÓN DEL BLOQUE " << (*exe_index)[i] << " ===\n\n";
-
-  } 
-
-  
- 
+    std::cout << "\n=== FIN DE EJECUCIÓN DEL BLOQUE " << (*exe_index)[i]
+              << " ===\n\n";
+  }
 }
 
-// corrige el incremento doble: run() ya incrementa exe_index, así que el callback solo llama a run
-void run_callback(Fl_Widget* widget, void* user_data) {
-    RunData* data = static_cast<RunData*>(user_data);
-    run(data->inst, (data->exe_index), (data->pes));
+// corrige el incremento doble: run() ya incrementa exe_index, así que el
+// callback solo llama a run
+void run_callback(Fl_Widget *widget, void *user_data) {
+  RunData *data = static_cast<RunData *>(user_data);
+  run(data->inst, (data->exe_index), (data->pcs), (data->pes));
+}
+
+void reset_callback(Fl_Widget *widget, void *user_data) {
+  ProgramData *ctx = static_cast<ProgramData *>(user_data);
+  if (!ctx || !ctx->run_data)
+    return;
+
+  // --- 1. Borrar los objetos viejos ---
+  RunData *rd = ctx->run_data;
+
+  // Borrar los PEs
+  if (rd->pes) {
+    for (auto *pe : *(rd->pes))
+      delete pe;
+    rd->pes->clear();
+  }
+
+  for (int i = 0; i < NUM_PE; i++) {
+    ProcessingElement *new_pe = new ProcessingElement(i, ctx->interconnect);
+    ctx->interconnect->registerSnoopModule(new_pe->getSnoop());
+    rd->pes->push_back(new_pe);
+  }
+
+  // --- 3. Actualizar los widgets ---
+
+  for (int i = 0; i < NUM_PE; i++) {
+    ctx->reg_tabs[i]->setProcessingElement((*(rd->pes))[i]);
+    ctx->cache_tabs[i]->setProcessingElement((*(rd->pes))[i]);
+  }
+
+  // --- 4. Resetear contadores de ejecución ---
+  std::fill(rd->exe_index->begin(), rd->exe_index->end(), 0);
+  std::fill(rd->pcs->begin(), rd->pcs->end(), 0);
+
+  std::cout << "✅ Sistema completamente reiniciado.\n";
 }
 
 // ==========================================
@@ -617,22 +786,23 @@ int main() {
   btn_load_mem->color(fl_rgb_color(180, 255, 180));
   btn_load_mem->callback(load_memory_cb, mem_tab);
 
+  RunData *run_data = new RunData{inst, exe_index, pcs, &pes};
+
   // Botón step (ahora conectado a STEP sincronizado)
   Fl_Button *btn_step = new Fl_Button(760, 10, 50, 30, "Step");
   btn_step->color(fl_rgb_color(200, 180, 255));
-  StepData* step_data = new StepData{inst, &pes};
-  btn_step->callback(step_callback, step_data);
+  StepData *step_data = new StepData{inst, &pes};
+  btn_step->callback(step_callback, run_data);
 
   // Botón BreakPoint / RUN
   Fl_Button *btn_run = new Fl_Button(820, 10, 70, 30, "RUN");
   btn_run->color(fl_rgb_color(200, 180, 255));
-  RunData* run_data = new RunData{inst,exe_index, &pes};
-  btn_run->callback(run_callback, run_data); 
+  btn_run->callback(run_callback, run_data);
 
   // Botón Reset STEP
   Fl_Button *btn_reset_step = new Fl_Button(890, 10, 70, 30, "Reset");
   btn_reset_step->color(fl_rgb_color(255, 220, 180));
-  btn_reset_step->callback(reset_step_callback, nullptr);
+  btn_reset_step->callback(reset_callback, nullptr);
 
   win->end();
   win->show();

@@ -1,8 +1,8 @@
 #include "file_line_selector.h"
 #include "interconnect.h"
 #include "mem.h"
-#include "processing_element.h"
 #include "mesi_state.h"
+#include "processing_element.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_File_Chooser.H>
@@ -20,7 +20,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 #define NUM_PE 4
 #define NUM_REG 8
 #define CACHE_SETS 8
@@ -31,8 +30,6 @@
 
 std::vector<int> *exe_index = new std::vector<int>(NUM_PE);
 std::vector<int> *pcs = new std::vector<int>(NUM_PE);
-
-
 
 // ==========================================
 // Table para Memoria
@@ -189,10 +186,10 @@ private:
         fl_draw("Usage", X, Y, W, H, FL_ALIGN_CENTER);
         break;
       case 4:
-      fl_draw(" MESI ", X, Y, W, H, FL_ALIGN_CENTER);
+        fl_draw(" MESI ", X, Y, W, H, FL_ALIGN_CENTER);
         break;
       default:
-        fl_draw(("D" + std::to_string(C - 4)).c_str(), X, Y, W, H,
+        fl_draw(("D" + std::to_string(C - 5)).c_str(), X, Y, W, H,
                 FL_ALIGN_CENTER);
         break;
       }
@@ -220,7 +217,7 @@ private:
         snprintf(s, sizeof(s), "%s", mesiStateToString(line.state));
         break;
       default:
-        snprintf(s, sizeof(s), "%.2f", line.data[C - 4]);
+        snprintf(s, sizeof(s), "%.2f", line.data[C - 5]);
         break;
       }
       fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
@@ -234,9 +231,9 @@ private:
 };
 
 // Estructura para pasar la memoria y la tabla
-struct MemoryData{
-  MemoryTable* mem_tab;
-  Memory* memory;
+struct MemoryData {
+  MemoryTable *mem_tab;
+  Memory *memory;
 };
 
 struct RunData {
@@ -513,7 +510,7 @@ void step_callback(Fl_Widget *widget, void *user_data) {
 void on_close(Fl_Widget *, void *) { exit(0); }
 
 void load_memory_cb(Fl_Widget *w, void *data) {
-  MemoryData *mem_data = static_cast<MemoryData*>(data);
+  MemoryData *mem_data = static_cast<MemoryData *>(data);
   MemoryTable *mem_tab = mem_data->mem_tab;
   Memory *memory = mem_data->memory;
 
@@ -529,7 +526,7 @@ void load_memory_cb(Fl_Widget *w, void *data) {
   }
 
   // Vector para los valores leídos
-  std::vector<std::vector<double>> mem_values; 
+  std::vector<std::vector<double>> mem_values;
   std::string line;
   while (std::getline(file, line)) {
     std::vector<double> row;
@@ -544,7 +541,8 @@ void load_memory_cb(Fl_Widget *w, void *data) {
         break;
     }
     if (!row.empty())
-      mem_values.push_back(row); // Se agrega la fila completa al vector principal
+      mem_values.push_back(
+          row); // Se agrega la fila completa al vector principal
   }
 
   file.close();
@@ -552,10 +550,10 @@ void load_memory_cb(Fl_Widget *w, void *data) {
 
   // Llenar la memoria real
   int address = 0; // Dirección inicial
-  for (const auto &row : mem_values){
-    for (double val : row){
+  for (const auto &row : mem_values) {
+    for (double val : row) {
       memory->initialize(address, val); // Escribe el valor en memoria real
-      address +=8; // Avanza 8 bytes 
+      address += 8;                     // Avanza 8 bytes
     }
   }
   std::cout << "Memoria cargada: " << filename << std::endl;
@@ -810,10 +808,10 @@ int main() {
   btn_close->color(fl_rgb_color(255, 180, 180));
   btn_close->callback(on_close);
 
-  // Objeto MemoryData, inicializando los punteros mem_tab y memory 
+  // Objeto MemoryData, inicializando los punteros mem_tab y memory
   // Empaqueta los punteros para que el callback tenga acceso a eĺ
-  MemoryData* mem_data = new MemoryData{mem_tab, memory};
-  
+  MemoryData *mem_data = new MemoryData{mem_tab, memory};
+
   // Botón cargar memoria ***
   Fl_Button *btn_load_mem = new Fl_Button(700, 660, 120, 40, "Cargar Memoria");
   btn_load_mem->color(fl_rgb_color(180, 255, 180));

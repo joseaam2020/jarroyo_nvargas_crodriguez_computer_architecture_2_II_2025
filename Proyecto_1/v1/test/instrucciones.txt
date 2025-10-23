@@ -1,37 +1,15 @@
 .PE0
-mov  r0, #16
-mov  r1, #1
-mov  r2, #0
-_hago  
-fadd r2, r2, r1
-dec r0
-jnz _hago
+mov  r0, #24
+load r5, [r0]
 
 .PE1
-
 mov  r0, #16
-mov  r1, #1
-mov  r2, #0
-_hago  
-fadd r2, r2, r1
-dec r0
-jnz _hago
-
+load r5, [r0]
 
 .PE2
-mov  r0, #16
-mov  r1, #1
-mov  r2, #0
-_hago  
-fadd r2, r2, r1
-dec r0
-jnz _hago
+mov  r0, #8
+load r5, [r0]
 
 .PE3
-mov  r0, #16
-mov  r1, #1
-mov  r2, #0
-_hago  
-fadd r2, r2, r1
-dec r0
-jnz _hago
+mov  r0, #32
+load r5, [r0]

@@ -31,6 +31,8 @@
 
 std::vector <int>*exe_index = new std::vector<int>(NUM_PE);
 
+
+
 // ==========================================
 // Table para Memoria
 // ==========================================
@@ -214,6 +216,12 @@ private:
   }
 };
 
+// Estructura para pasar la memoria y la tabla
+struct MemoryData{
+  MemoryTable* mem_tab;
+  Memory* memory;
+};
+
 struct RunData {
     FileLineSelector* inst;
     std::vector<int> *exe_index;
@@ -365,7 +373,9 @@ void reset_step_callback(Fl_Widget* widget, void* user_data) {
 void on_close(Fl_Widget *, void *) { exit(0); }
 
 void load_memory_cb(Fl_Widget *w, void *data) {
-  MemoryTable *mem_tab = static_cast<MemoryTable *>(data);
+  MemoryData *mem_data = static_cast<MemoryData*>(data);
+  MemoryTable *mem_tab = mem_data->mem_tab;
+  Memory *memory = mem_data->memory;
 
   const char *filename =
       fl_file_chooser("Seleccionar archivo de memoria", "*.txt", nullptr);
@@ -378,7 +388,8 @@ void load_memory_cb(Fl_Widget *w, void *data) {
     return;
   }
 
-  std::vector<std::vector<double>> mem_data;
+  // Vector para los valores leídos
+  std::vector<std::vector<double>> mem_values; 
   std::string line;
   while (std::getline(file, line)) {
     std::vector<double> row;
@@ -392,11 +403,21 @@ void load_memory_cb(Fl_Widget *w, void *data) {
       } else
         break;
     }
-    mem_data.push_back(row);
+    if (!row.empty())
+      mem_values.push_back(row); // Se agrega la fila completa al vector principal
   }
 
   file.close();
-  mem_tab->set_memory(mem_data);
+  mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores leídos
+
+  // Llenar la memoria real
+  int address = 0; // Dirección inicial
+  for (const auto &row : mem_values){
+    for (double val : row){
+      memory->initialize(address, val); // Escribe el valor en memoria real
+      address +=8; // Avanza 8 bytes 
+    }
+  }
   std::cout << "Memoria cargada: " << filename << std::endl;
 }
 
@@ -612,10 +633,14 @@ int main() {
   btn_close->color(fl_rgb_color(255, 180, 180));
   btn_close->callback(on_close);
 
-  // Botón cargar memoria
+  // Objeto MemoryData, inicializando los punteros mem_tab y memory 
+  // Empaqueta los punteros para que el callback tenga acceso a eĺ
+  MemoryData* mem_data = new MemoryData{mem_tab, memory};
+  
+  // Botón cargar memoria ***
   Fl_Button *btn_load_mem = new Fl_Button(700, 660, 120, 40, "Cargar Memoria");
   btn_load_mem->color(fl_rgb_color(180, 255, 180));
-  btn_load_mem->callback(load_memory_cb, mem_tab);
+  btn_load_mem->callback(load_memory_cb, mem_data); // Le paso el paquete
 
   // Botón step (ahora conectado a STEP sincronizado)
   Fl_Button *btn_step = new Fl_Button(760, 10, 50, 30, "Step");

@@ -2,6 +2,7 @@
 #include "interconnect.h"
 #include "mem.h"
 #include "processing_element.h"
+#include "mesi_state.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_File_Chooser.H>
@@ -18,6 +19,7 @@
 #include <vector>
 #include <thread>
 #include <unordered_map>
+
 
 
 #define NUM_PE 4
@@ -143,7 +145,7 @@ public:
   CacheTable(int X, int Y, int W, int H, ProcessingElement *pe)
       : Fl_Table(X, Y, W, H), pe(pe) {
     rows(CACHE_SETS * CACHE_WAYS);
-    cols(4 +
+    cols(5 +
          DATA_PER_CACHE); // Set, Way, Tag, Usage, Data0, Data1, Data2, Data3
     row_header(0);
     col_header(1);
@@ -177,6 +179,9 @@ private:
       case 3:
         fl_draw("Usage", X, Y, W, H, FL_ALIGN_CENTER);
         break;
+      case 4:
+      fl_draw(" MESI ", X, Y, W, H, FL_ALIGN_CENTER);
+        break;
       default:
         fl_draw(("D" + std::to_string(C - 4)).c_str(), X, Y, W, H,
                 FL_ALIGN_CENTER);
@@ -201,6 +206,9 @@ private:
         break;
       case 3:
         snprintf(s, sizeof(s), "%d", line.usage_count);
+        break;
+      case 4:
+        snprintf(s, sizeof(s), "%s", mesiStateToString(line.state));
         break;
       default:
         snprintf(s, sizeof(s), "%.2f", line.data[C - 4]);
@@ -595,15 +603,15 @@ int main() {
     pes.push_back(pe);
   }
 
-  Fl_Window *win = new Fl_Window(1000, 800, " Visor de PEs");
-  Fl_Tabs *tabs = new Fl_Tabs(10, 10, 980, 700);
+  Fl_Window *win = new Fl_Window(1190, 800, " Visor de PEs");
+  Fl_Tabs *tabs = new Fl_Tabs(10, 10, 1150, 700);
 
   // Tab de instrucciones / FileLineSelector
-  Fl_Group *grp = new Fl_Group(10, 40, 980, 610, "Instrucciones");
+  Fl_Group *grp = new Fl_Group(10, 40, 1050, 610, "Instrucciones");
   grp->color(fl_rgb_color(245, 240, 255));
 
   grp->box(FL_EMBOSSED_BOX);
-  FileLineSelector *inst = new FileLineSelector(20, 50, 940, 540, win);
+  FileLineSelector *inst = new FileLineSelector(20, 50, 990, 540, win);
   grp->end();
 
   // Tabs para PEs
@@ -617,7 +625,7 @@ int main() {
     // Tabla de registros
     RegTable *reg_tab = new RegTable(20, 50, 300, 400, pes[pe]);
     // Tabla de cache
-    CacheTable *cache_tab = new CacheTable(300, 50, 700, 600, pes[pe]);
+    CacheTable *cache_tab = new CacheTable(300, 50, 800, 600, pes[pe]);
     grp->end();
   }
 

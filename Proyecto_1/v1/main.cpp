@@ -115,6 +115,7 @@ int main() {
       for (const auto &block : pe_instructions[i]) {
         std::cout << "[Bloque]\n";
         for (const auto &instr : block) {
+          if (!pes[i]->isActive()) break;
           pes[i]->execute(instr);
 
           std::lock_guard<std::mutex> lock(print_mutex);

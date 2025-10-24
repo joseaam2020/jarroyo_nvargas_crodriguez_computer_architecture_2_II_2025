@@ -15,6 +15,7 @@ private:
   double regs[NUMERO_REGISTROS] = {};
   Cache *cache;
   SnoopModule *snoop;
+  bool active = true; // Para saber si el PE está activo
 
   bool isValidRegister(short reg) const;
 
@@ -36,6 +37,9 @@ public:
 
   int getPEId() const { return pe_id; }
   SnoopModule *getSnoop() { return snoop; }
+
+  void end(); // Función para finalizar el PE y hacer flush
+  bool isActive() const; // Saber si el PE sigue activo
   
   
 

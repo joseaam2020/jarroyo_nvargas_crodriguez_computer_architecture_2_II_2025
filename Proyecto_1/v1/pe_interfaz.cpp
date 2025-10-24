@@ -36,11 +36,11 @@ std::vector<int> *pcs = new std::vector<int>(NUM_PE);
 // Table para Memoria
 // ==========================================
 class MemoryTable : public Fl_Table {
-  std::vector<std::vector<double>> memory_data;
+  Memory *memory;
 
 public:
-  MemoryTable(int X, int Y, int W, int H, const char *L = 0)
-      : Fl_Table(X, Y, W, H, L) {
+  MemoryTable(int X, int Y, int W, int H, Memory *memory, const char *L = 0)
+      : Fl_Table(X, Y, W, H, L), memory(memory) {
     rows(BLOCKS);
     cols(ADDRS_PER_BLOCK + 1);
     row_height_all(30);
@@ -52,8 +52,8 @@ public:
     end();
   }
 
-  void set_memory(const std::vector<std::vector<double>> &mem) {
-    memory_data = mem;
+  void set_memory(Memory *memory) {
+    this->memory = memory;
     redraw();
   }
 
@@ -68,13 +68,16 @@ protected:
       fl_rectf(X, Y, W, H);
       fl_color(FL_BLACK);
       fl_rect(X, Y, W, H);
-      if (C == 0)
+      if (C == 0) {
         snprintf(s, sizeof(s), "Bloque %d", R);
-      else if (R < static_cast<int>(memory_data.size()) &&
-               C - 1 < static_cast<int>(memory_data[R].size()))
-        snprintf(s, sizeof(s), "%.2f", memory_data[R][C - 1]);
-      else
-        snprintf(s, sizeof(s), "0.00");
+      } else {
+        int index = R * ADDRS_PER_BLOCK + (C - 1);
+        if (index < static_cast<int>(memory->getStorage().size()))
+          snprintf(s, sizeof(s), "%.2f", memory->getStorage()[index]);
+        else
+          snprintf(s, sizeof(s), "0.00");
+      }
+
       fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
       fl_pop_clip();
       break;
@@ -675,7 +678,7 @@ void load_memory_cb(Fl_Widget *w, void *data) {
   }
 
   file.close();
-  mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores leídos
+  //mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores leídos
 
   // Llenar la memoria real
   int address = 0; // Dirección inicial
@@ -686,6 +689,7 @@ void load_memory_cb(Fl_Widget *w, void *data) {
     }
   }
   std::cout << "Memoria cargada: " << filename << std::endl;
+  memory->printMemory();
 }
 
 //  CALLBACK para cargar instrucciones
@@ -946,7 +950,7 @@ int main() {
 
   // Tab de memoria
   Fl_Group *grp_mem = new Fl_Group(10, 40, 980, 610, "Memoria");
-  MemoryTable *mem_tab = new MemoryTable(20, 50, 810, 600);
+  MemoryTable *mem_tab = new MemoryTable(20, 50, 810, 600, memory);
   grp_mem->end();
 
   tabs->end();

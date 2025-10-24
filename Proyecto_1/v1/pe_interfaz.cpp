@@ -1,5 +1,5 @@
-#include "file_line_selector.h"
 #include "cache.h"
+#include "file_line_selector.h"
 #include "interconnect.h"
 #include "mem.h"
 #include "mesi_state.h"
@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -155,7 +156,6 @@ public:
     end();
   }
 
-
   void setProcessingElement(ProcessingElement *pe) {
     this->pe = pe;
     redraw();
@@ -188,7 +188,7 @@ private:
         fl_draw("Usage", X, Y, W, H, FL_ALIGN_CENTER);
         break;
       case 4:
-       
+
       default:
         fl_draw(("D" + std::to_string(C - 5)).c_str(), X, Y, W, H,
                 FL_ALIGN_CENTER);
@@ -196,7 +196,6 @@ private:
       }
       fl_pop_clip();
       break;
-
 
     case CONTEXT_CELL:
       fl_push_clip(X, Y, W, H);
@@ -262,7 +261,7 @@ private:
   void draw_cell(TableContext context, int R, int C, int X, int Y, int W,
                  int H) override {
     char s[100];
-    
+
     switch (context) {
     case CONTEXT_COL_HEADER:
       // Dibujar el header de las columnas (igual que CacheTable)
@@ -270,26 +269,26 @@ private:
       fl_draw_box(FL_FLAT_BOX, X, Y, W, H, fl_rgb_color(200, 200, 200));
       fl_color(FL_BLACK);
       fl_font(FL_HELVETICA_BOLD, 12);
-      
+
       if (C == 0) {
         fl_draw("Métrica", X, Y, W, H, FL_ALIGN_CENTER);
       } else {
         fl_draw("Valor", X, Y, W, H, FL_ALIGN_CENTER);
       }
-      
+
       fl_pop_clip();
       break;
-      
+
     case CONTEXT_CELL:
       fl_push_clip(X, Y, W, H);
-      
+
       // Color de fondo blanco (como CacheTable)
       fl_color(FL_WHITE);
       fl_rectf(X, Y, W, H);
-      
+
       fl_color(FL_BLACK);
       fl_rect(X, Y, W, H);
-      
+
       if (C == 0) {
         // Columna de nombres de métricas
         fl_font(FL_HELVETICA, 12);
@@ -338,18 +337,16 @@ private:
           break;
         }
       }
-      
+
       fl_draw(s, X + 4, Y, W - 4, H, FL_ALIGN_LEFT);
       fl_pop_clip();
       break;
-      
+
     default:
       break;
     }
   }
 };
-
-
 
 // Estructura para pasar la memoria y la tabla
 struct MemoryData {
@@ -371,155 +368,8 @@ struct ProgramData {
   MemoryTable *mem_tab;
   std::vector<RegTable *> reg_tabs;
   std::vector<CacheTable *> cache_tabs;
-  std::vector<CacheStatsTable *> stats_tabs; 
+  std::vector<CacheStatsTable *> stats_tabs;
 };
-
-// ========================================
-// STEP sincronizado: estado y funciones
-// Ejecuta la misma instrucción (índice) en todos los PEs al mismo tiempo
-// ========================================
-struct StepState {
-  std::vector<std::vector<std::vector<std::string>>>
-      pe_instructions; // [PE][bloque][instr]
-  int global_block;    // bloque actual común
-  int global_instr;    // índice de instrucción dentro del bloque
-  bool initialized;
-
-  StepState() : global_block(0), global_instr(0), initialized(false) {
-    pe_instructions.resize(NUM_PE);
-  }
-};
-
-struct StepData {
-  FileLineSelector *inst;
-  std::vector<ProcessingElement *> *pes;
-};
-
-StepState g_step_state;
-
-void parse_instructions_for_step(FileLineSelector *fls, StepState *state) {
-  state->pe_instructions.clear();
-  state->pe_instructions.resize(NUM_PE);
-
-  int current_pe = -1;
-  std::vector<std::string> file_lines = fls->get_file_lines();
-
-  for (const auto &line : file_lines) {
-    if (line.rfind(".PE", 0) == 0) {
-      // formato .PE#
-      current_pe = std::stoi(line.substr(3));
-      if (current_pe >= 0 && current_pe < NUM_PE) {
-        state->pe_instructions[current_pe].push_back({});
-      }
-    } else if (current_pe != -1 && current_pe >= 0 && current_pe < NUM_PE) {
-      if (line == "#BREAKPOINT") {
-        state->pe_instructions[current_pe].push_back({});
-      } else {
-        if (state->pe_instructions[current_pe].empty()) {
-          state->pe_instructions[current_pe].push_back({});
-        }
-        state->pe_instructions[current_pe].back().push_back(line);
-      }
-    }
-  }
-
-  state->global_block = 0;
-  state->global_instr = 0;
-  state->initialized = true;
-
-  std::cout << "\n🔧 Instrucciones parseadas para STEP:\n";
-  for (int i = 0; i < NUM_PE; ++i) {
-    std::cout << "  PE" << i << ": " << state->pe_instructions[i].size()
-              << " bloques\n";
-  }
-  std::cout << std::endl;
-}
-//
-/*
-void step(StepData *data) {
-  StepState *state = &g_step_state;
-
-  if (!state->initialized) {
-    parse_instructions_for_step(data->inst, state);
-  }
-
-  bool hayTrabajo = false;
-  std::vector<std::thread> threads;
-
-  std::cout << "\n STEP sincronizado: Bloque " << state->global_block
-            << ", Instrucción " << state->global_instr << "\n";
-  std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-
-  for (int pe = 0; pe < NUM_PE; ++pe) {
-    auto &bloques = state->pe_instructions[pe];
-
-    // Si el PE no tiene ese bloque, se salta
-    if (state->global_block >= (int)bloques.size())
-      continue;
-
-    auto &instrucciones = bloques[state->global_block];
-
-    // Si el PE no tiene esa instrucción indexada, se salta
-    if (state->global_instr >= (int)instrucciones.size())
-      continue;
-
-    hayTrabajo = true;
-    std::string instr = instrucciones[state->global_instr];
-
-    std::cout << "▶️ [PE" << pe << "] ejecutando: " << instr << std::endl;
-
-    // Ejecutar en paralelo por PE
-    threads.emplace_back(
-        [pe, instr, data]() { (*(data->pes))[pe]->execute(instr); });
-  }
-
-  // esperar
-  for (auto &t : threads)
-    t.join();
-
-  if (!hayTrabajo) {
-    std::cout << "✅ No hay más instrucciones pendientes en ninguno de los PEs "
-                 "(STEP terminó).\n";
-    return;
-  }
-
-  // avanzar índice dentro del bloque
-  state->global_instr++;
-
-  // comprobar si ya no hay instrucciones en este bloque para ninguno (entonces
-  // avanzar bloque)
-  bool anyRemainingInBlock = false;
-  for (int pe = 0; pe < NUM_PE; ++pe) {
-    auto &bloques = state->pe_instructions[pe];
-    if (state->global_block < (int)bloques.size()) {
-      if (state->global_instr < (int)bloques[state->global_block].size()) {
-        anyRemainingInBlock = true;
-        break;
-      }
-    }
-  }
-
-  if (!anyRemainingInBlock) {
-    // avanzar a siguiente bloque global
-    state->global_block++;
-    state->global_instr = 0;
-    std::cout << "🔁 Avanzando a bloque global " << state->global_block << "\n";
-  }
-}
-
-void step_callback(Fl_Widget *widget, void *user_data) {
-  StepData *data = static_cast<StepData *>(user_data);
-  step(data);
-}
-
-void reset_step_callback(Fl_Widget *widget, void *user_data) {
-  (void)user_data;
-  g_step_state.global_block = 0;
-  g_step_state.global_instr = 0;
-  g_step_state.initialized = false;
-  std::cout << "\n🔄 STEP reiniciado: Bloque 0, Instrucción 0 (re-parse al "
-               "siguiente STEP)\n\n";
-}*/
 
 void step(FileLineSelector *fls, std::vector<int> *exe_index,
           std::vector<int> *pcs, std::vector<ProcessingElement *> *pes) {
@@ -622,15 +472,9 @@ void step(FileLineSelector *fls, std::vector<int> *exe_index,
 };
 
 void step_callback(Fl_Widget *widget, void *user_data) {
+  std::cout << "HACIENDO STEP!" << std::endl;
   RunData *data = static_cast<RunData *>(user_data);
   step(data->inst, (data->exe_index), (data->pcs), (data->pes));
-
-  ProgramData *prog = static_cast<ProgramData *>(widget->parent()->user_data());
-  for (auto *tab : prog->stats_tabs)
-    tab->redraw();
-  for (auto *tab : prog->cache_tabs)
-    tab->redraw();
-
 }
 
 // ==========================================
@@ -695,10 +539,6 @@ void load_instructions_cb(Fl_Widget *w, void *data) {
 
   // Mostrar confirmación
   std::cout << "Instrucciones cargadas exitosamente!" << std::endl;
-
-  // Al recargar instrucciones reiniciamos el estado de STEP para que se
-  // re-parseen
-  g_step_state.initialized = false;
 }
 
 void run(FileLineSelector *fls, std::vector<int> *exe_index,
@@ -926,15 +766,12 @@ int main() {
     // Tabla de registros
     RegTable *reg_tab = new RegTable(20, 50, 300, 270, pes[pe]);
 
-
-
-    //Tabla de stats de PE
-    CacheStatsTable *stats_tab = new CacheStatsTable(20, 330, 350, 220, pes[pe]);
-
+    // Tabla de stats de PE
+    CacheStatsTable *stats_tab =
+        new CacheStatsTable(20, 330, 350, 220, pes[pe]);
 
     // Tabla de cache
     CacheTable *cache_tab = new CacheTable(380, 50, 780, 580, pes[pe]);
-
 
     // Se guarda en data
     data->reg_tabs.push_back(reg_tab);
@@ -972,7 +809,6 @@ int main() {
   // Botón step (ahora conectado a STEP sincronizado)
   Fl_Button *btn_step = new Fl_Button(760, 10, 50, 30, "Step");
   btn_step->color(fl_rgb_color(200, 180, 255));
-  StepData *step_data = new StepData{inst, &pes};
   btn_step->callback(step_callback, run_data);
 
   // Botón BreakPoint / RUN

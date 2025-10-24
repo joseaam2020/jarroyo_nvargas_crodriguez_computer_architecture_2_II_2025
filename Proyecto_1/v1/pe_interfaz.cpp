@@ -399,18 +399,18 @@ void step(FileLineSelector *fls, std::vector<int> *exe_index,
     }
   }
 
-  // Verificar bloques válidos
-  for (int i = 0; i < NUM_PE; i++) {
-    if ((*exe_index)[i] >= (int)pe_instructions[i].size()) {
-      std::cout << "[PE" << i << "] No tiene bloque válido\n";
-      return;
-    }
-  }
-
   // Ejecutar un paso por PE (en paralelo)
   std::vector<std::thread> threads;
   for (int i = 0; i < NUM_PE; i++) {
     threads.emplace_back([&, i]() {
+      if ((*exe_index)[i] >= static_cast<int>(pe_instructions[i].size()) ||
+          pe_instructions[i][(*exe_index)[i]]
+              .empty()) { // Si tiene bloque no tiene bloque
+        std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index)[i]
+                  << "\n";
+        return;
+      }
+
       int block_index = (*exe_index)[i];
 
       // Evitar acceso fuera de rango
@@ -522,7 +522,8 @@ void load_memory_cb(Fl_Widget *w, void *data) {
   }
 
   file.close();
-  //mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores leídos
+  // mem_tab->set_memory(mem_values); // Actualizar la tabla con los valores
+  // leídos
 
   // Llenar la memoria real
   int address = 0; // Dirección inicial
@@ -588,30 +589,18 @@ void run(FileLineSelector *fls, std::vector<int> *exe_index,
     }
   }
 
-  // Verificar que exe_index sea válido para todos los PEs
-
-  bool all_have_block = true;
-  for (int i = 0; i < NUM_PE; i++) {
-    if ((*exe_index)[i] >= static_cast<int>(pe_instructions[i].size()) ||
-        pe_instructions[i][(*exe_index)[i]].empty()) {
-      std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index)[i]
-                << "\n";
-      all_have_block = false;
-    }
-  }
-
-  if (!all_have_block) {
-    for (int i = 0; i < NUM_PE; i++) {
-      std::cout << " No todos los PEs tienen el bloque " << (*exe_index)[i]
-                << "\n";
-      return;
-    }
-  }
-
   // Ejecutar los hilos de cada PE en paralelo
   std::vector<std::thread> threads;
   for (int i = 0; i < NUM_PE; i++) {
     threads.emplace_back([&pe_instructions, &pes, i, exe_index, pcs]() {
+      if ((*exe_index)[i] >= static_cast<int>(pe_instructions[i].size()) ||
+          pe_instructions[i][(*exe_index)[i]]
+              .empty()) { // Si tiene bloque no tiene bloque
+        std::cout << "[PE" << i << "] no tiene bloque " << (*exe_index)[i]
+                  << "\n";
+        return;
+      }
+
       // 1. Construir el mapa de etiquetas para este PE
       std::unordered_map<std::string, std::pair<int, int>> label_map;
 

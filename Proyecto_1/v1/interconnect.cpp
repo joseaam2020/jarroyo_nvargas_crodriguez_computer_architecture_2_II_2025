@@ -2,7 +2,6 @@
 #include "snoop.h"
 #include <iostream>
 
-
 Interconnect::Interconnect(Memory *mem) : memory(mem) {}
 
 // Recibo los snoops
@@ -11,7 +10,8 @@ void Interconnect::registerSnoopModule(SnoopModule *snoop) {
 }
 
 // Señal de lectura desde el snoop
-Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe, int address) {
+Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe,
+                                                    int address) {
   std::unique_lock<std::mutex> lock(bus_mutex); // Esperar turno del bus
   std::cout << "\n[BUS] PE" << requesting_pe << " broadcasts READ for address "
             << address << std::endl;
@@ -60,7 +60,7 @@ Interconnect::BusResult Interconnect::broadcastRead(int requesting_pe, int addre
 
 // Notifico a las snoops en ponerse en invalidate
 void Interconnect::broadcastInvalidate(int requesting_pe, int address) {
-  //std::unique_lock<std::mutex> lock(bus_mutex); // Esperar turno del bus
+  std::unique_lock<std::mutex> lock(bus_mutex); // Esperar turno del bus
   std::cout << "\n[BUS] PE" << requesting_pe
             << " broadcasts INVALIDATE for address " << address << std::endl;
 

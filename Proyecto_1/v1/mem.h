@@ -33,6 +33,9 @@ public:
   // Imprime todas las direcciones y sus datos almacenados
   void printMemory() const;
 
+  //
+  std::vector<double> getStorage() const { return storage; }
+
   // Devuelve el número de veces que se ha accedido a la memoria
   int getAccessCount() const { return access_count; }
 };

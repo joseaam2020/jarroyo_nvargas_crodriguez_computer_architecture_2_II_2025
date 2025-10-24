@@ -15,6 +15,7 @@ private:
   double regs[NUMERO_REGISTROS] = {};
   Cache *cache;
   SnoopModule *snoop;
+  bool active = true; // Para saber si el PE está activo
 
   bool isValidRegister(short reg) const;
 
@@ -30,12 +31,23 @@ public:
   void dec(short reg);
   void jnz(std::string label);
   void mov(short reg, double value);
+  Cache *getCache() const { return cache; }
+  const double *getRegisters() const { return regs; }
   void execute(std::string op);
 
   int getPEId() const { return pe_id; }
   SnoopModule *getSnoop() { return snoop; }
 
+  void end(); // Función para finalizar el PE y hacer flush
+  bool isActive() const; // Saber si el PE sigue activo
+  
+  
+
   void printStatus() const;
+
+
+
+
 };
 
 #endif

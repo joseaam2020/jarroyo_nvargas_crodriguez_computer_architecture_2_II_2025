@@ -10,6 +10,21 @@ ProcessingElement::ProcessingElement(int id, Interconnect *bus) : pe_id(id) {
 
 ProcessingElement::~ProcessingElement() {}
 
+bool ProcessingElement::isActive() const{
+  return this->active;
+}
+
+void ProcessingElement::end(){
+  if (this->cache){
+    std::cout<<"[PE" << pe_id<<"] haciendo flush" <<std::endl;
+    this->cache->flush();
+  }
+
+  this->active = false; // Marcar el PE como inactivo
+  std::cout<<"[PE" << pe_id<<"] terminó su ejecución" <<std::endl;
+
+}
+
 void ProcessingElement::load(short reg, short regd) {
   // Dato en cache
   if (isValidRegister(reg) & isValidRegister(regd)) {
@@ -65,7 +80,7 @@ void ProcessingElement::mov(short reg, double value) {
 }
 
 void ProcessingElement::execute(std::string op) {
-
+ 
   // Lista para guardar los tokens
   std::vector<std::string> token_list;
 
@@ -90,22 +105,27 @@ void ProcessingElement::execute(std::string op) {
     // Obtener el primer token
     std::string command = token_list[0];
 
+    if (command == "end") {
+      // end
+      this->end();
+      return; // Salir de la ejecución
+    }
+    
+    
     if (command == "load") {
       // load r5, [r0]
       std::string dest_reg = token_list[1];  // Obtiene r#
       std::string dest_regd = token_list[2]; // Obtiene [r#]
+    
 
       // Obtener el número en r#
       short reg = std::stoi(dest_reg.substr(1)); // r# -> #
+    
 
-      // Obtener número de [r#]
-      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-        std::string addr_regd =
-            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
+      short regd = std::stoi(dest_regd.substr(2,3)); // [r#] -> #
 
-        this->load(reg, regd);
-      }
+      this->load(reg, regd);
+      
     }
 
     if (command == "store") {
@@ -117,13 +137,9 @@ void ProcessingElement::execute(std::string op) {
       short reg = std::stoi(dest_reg.substr(1)); // r# -> #
 
       // Obtener número de [r#]
-      if (dest_regd.front() == '[' && dest_regd.back() == ']') {
-        std::string addr_regd =
-            dest_regd.substr(1, dest_regd.size() - 2); // [r#] -> r#
-        short regd = std::stoi(dest_regd.substr(1));   // r# -> #
-
-        this->store(reg, regd);
-      }
+      short regd = std::stoi(dest_regd.substr(2,3)); // [r#] -> #
+      this->store(reg, regd);
+      
     }
 
     if (command == "fmul") {

@@ -1,41 +1,83 @@
-# Compilador y flags
-CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2
+# Compilador
+CXX = g++
 
 # Directorios
 SRC_DIR := .
 BUILD_DIR := build
 
-# Archivos fuente y objetos
-SRCS := $(SRC_DIR)/main.cpp \
-        $(SRC_DIR)/cache.cpp \
-        $(SRC_DIR)/interconnect.cpp \
-        $(SRC_DIR)/mem.cpp \
-        $(SRC_DIR)/processing_element.cpp \
-        $(SRC_DIR)/snoop.cpp
+# Flags
+CXXFLAGS = -Wall -std=c++17
+LDFLAGS = -lfltk
 
-OBJS := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
+# Archivos fuente
+SRC = pe_interfaz.cpp file_line_selector.cpp mem.cpp interconnect.cpp processing_element.cpp cache.cpp snoop.cpp
 
-# Ejecutable final
-TARGET := $(BUILD_DIR)/mesi_simulator
+# Archivos objeto (en build/)
+OBJ = $(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SRC))
 
-# Regla por defecto
+# Nombre del ejecutable
+TARGET = $(BUILD_DIR)/pe_interfaz
+
+# Regla principal
 all: $(TARGET)
 
-# Enlazado final
-$(TARGET): $(OBJS)
+# Cómo generar el ejecutable
+$(TARGET): $(OBJ)
 	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $(TARGET) $(LDFLAGS)
 
-# Compilación de objetos
+# Cómo compilar cada .cpp en .o dentro de build/
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Limpiar archivos
+# Limpiar archivos compilados
 clean:
 	rm -rf $(BUILD_DIR)
 
-# Ejecutar
+# Para ejecutar el programa con "make run"
 run: $(TARGET)
 	./$(TARGET)
+
+
+# # Compilador y flags
+# CXX := g++
+# CXXFLAGS := -std=c++17 -Wall -Wextra -O2
+
+# # Directorios
+# SRC_DIR := .
+# BUILD_DIR := build
+
+# # Archivos fuente y objetos
+# SRCS := $(SRC_DIR)/main.cpp \
+#         $(SRC_DIR)/cache.cpp \
+#         $(SRC_DIR)/interconnect.cpp \
+#         $(SRC_DIR)/mem.cpp \
+#         $(SRC_DIR)/processing_element.cpp \
+#         $(SRC_DIR)/snoop.cpp
+
+# OBJS := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
+
+# # Ejecutable final
+# TARGET := $(BUILD_DIR)/mesi_simulator
+
+# # Regla por defecto
+# all: $(TARGET)
+
+# # Enlazado final
+# $(TARGET): $(OBJS)
+# 	@mkdir -p $(BUILD_DIR)
+# 	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# # Compilación de objetos
+# $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+# 	@mkdir -p $(BUILD_DIR)
+# 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# # Limpiar archivos
+# clean:
+# 	rm -rf $(BUILD_DIR)
+
+# # Ejecutar
+# run: $(TARGET)
+# 	./$(TARGET)

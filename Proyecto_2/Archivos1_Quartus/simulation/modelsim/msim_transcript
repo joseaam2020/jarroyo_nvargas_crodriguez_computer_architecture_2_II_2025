@@ -1,0 +1,97 @@
+# do Avance5_run_msim_rtl_verilog.do
+# if {[file exists rtl_work]} {
+# 	vdel -lib rtl_work -all
+# }
+# vlib rtl_work
+# vmap work rtl_work
+# Model Technology ModelSim - Intel FPGA Edition vmap 2020.1 Lib Mapping Utility 2020.02 Feb 28 2020
+# vmap work rtl_work 
+# Copying /home/noemi/intelFPGA_lite/20.1/modelsim_ase/linuxaloem/../modelsim.ini to modelsim.ini
+# Modifying modelsim.ini
+# 
+# vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv}
+# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
+# Start time: 23:17:03 on Nov 29,2025
+# vlog -reportprogress 300 -sv -work work "+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus" /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv 
+# -- Compiling package fixed_point_pkg
+# 
+# Top level modules:
+# 	--none--
+# End time: 23:17:03 on Nov 29,2025, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv}
+# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
+# Start time: 23:17:03 on Nov 29,2025
+# vlog -reportprogress 300 -sv -work work "+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus" /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv 
+# -- Compiling package bilinear_interpolator_sv_unit
+# -- Importing package fixed_point_pkg
+# -- Compiling module bilinear_interpolator
+# 
+# Top level modules:
+# 	bilinear_interpolator
+# End time: 23:17:03 on Nov 29,2025, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# 
+# vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv}
+# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
+# Start time: 23:17:03 on Nov 29,2025
+# vlog -reportprogress 300 -sv -work work "+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus" /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv 
+# -- Compiling package bilinear_interpolator_tb_sv_unit
+# -- Importing package fixed_point_pkg
+# -- Compiling module tb_bilinear_interpolator
+# 
+# Top level modules:
+# 	tb_bilinear_interpolator
+# End time: 23:17:03 on Nov 29,2025, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# 
+# vsim -t 1ps -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L rtl_work -L work -voptargs="+acc"  tb_bilinear_interpolator
+# vsim -t 1ps -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L rtl_work -L work -voptargs=""+acc"" tb_bilinear_interpolator 
+# Start time: 23:17:03 on Nov 29,2025
+# Loading sv_std.std
+# Loading work.fixed_point_pkg
+# Loading work.bilinear_interpolator_tb_sv_unit
+# Loading work.tb_bilinear_interpolator
+# Loading work.bilinear_interpolator_sv_unit
+# Loading work.bilinear_interpolator
+# 
+# add wave *
+# view structure
+# .main_pane.structure.interior.cs.body.struct
+# view signals
+# .main_pane.objects.interior.cs.body.tree
+# run -all
+# === Bilinear Interpolator Testbench ===
+# 
+# Test: All pixels equal
+#   Output: 100 (expected: 100)
+#   PASS
+# 
+# Test: No interpolation (0,0)
+#   Output: 50 (expected: 50)
+#   PASS
+# 
+# Test: Horizontal interpolation
+#   Output: 75 (expected: 75)
+#   PASS
+# 
+# Test: Vertical interpolation
+#   Output: 75 (expected: 75)
+#   PASS
+# 
+# Test: Full bilinear (center)
+#   Output: 100 (expected: 100)
+#   PASS
+# 
+# Test: Quarter interpolation
+#   Output: 100 (expected: 100)
+#   PASS
+# 
+# === All Tests Complete ===
+# 
+# ** Note: $finish    : /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv(128)
+#    Time: 350 ps  Iteration: 0  Instance: /tb_bilinear_interpolator
+# 1
+# Break in Module tb_bilinear_interpolator at /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv line 128
+# End time: 23:17:16 on Nov 29,2025, Elapsed time: 0:00:13
+# Errors: 0, Warnings: 0

@@ -1,0 +1,24 @@
+transcript on
+if {[file exists rtl_work]} {
+	vdel -lib rtl_work -all
+}
+vlib rtl_work
+vmap work rtl_work
+
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/control_registers.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/downscaler_fsm.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/image_memory.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/performance_counters.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/address_generator.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv}
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/downscaler_top.sv}
+
+vlog -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus {/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/downscaler_top_tb.sv}
+
+vsim -t 1ps -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cyclonev_ver -L cyclonev_hssi_ver -L cyclonev_pcie_hip_ver -L rtl_work -L work -voptargs="+acc"  downscaler_top_tb
+
+add wave *
+view structure
+view signals
+run -all

@@ -1,0 +1,201 @@
+import fixed_point_pkg::*;
+
+module downscaler_top (
+    input  logic        clk,
+    input  logic        rst_n,
+
+    input  logic [7:0]  reg_addr,
+    input  logic        reg_wr_en,
+    input  logic        reg_rd_en,
+    input  logic [31:0] reg_wr_data,
+    output logic [31:0] reg_rd_data,
+
+    input  logic [17:0] img_wr_addr,
+    input  logic        img_wr_en,
+    input  logic [7:0]  img_wr_data,
+
+    output logic [17:0] result_rd_addr,
+    output logic [7:0]  result_rd_data
+);
+
+    logic [9:0]  img_width, img_height;
+    logic [15:0] scale_factor;
+    logic        mode_simd;
+    logic [2:0]  simd_width;
+    logic        start, step_mode, step_next;
+    logic        busy, ready, error;
+    logic [31:0] progress;
+    logic [31:0] flops_count, mem_reads, mem_writes;
+
+    logic        addr_gen_start, addr_gen_next, addr_gen_done, addr_gen_valid;
+    logic [17:0] addr_tl, addr_tr, addr_bl, addr_br;
+    fixed_point_t weight_x, weight_y;
+
+    logic [7:0]  pixel_tl, pixel_tr, pixel_bl, pixel_br;
+    logic        interp_valid_in, interp_valid_out;
+    logic [7:0]  pixel_out;
+
+    logic [17:0] src_mem_rd_addr;
+    logic [7:0]  src_mem_rd_data;
+
+    logic [17:0] dst_mem_wr_addr;
+    logic        dst_mem_wr_en;
+    logic [7:0]  dst_mem_wr_data;
+
+    logic        mem_fetch_en, interp_en, result_write_en;
+
+    logic [31:0] pixel_counter;
+
+    control_registers ctrl_regs (
+        .clk(clk),
+        .rst_n(rst_n),
+        .addr(reg_addr),
+        .wr_en(reg_wr_en),
+        .rd_en(reg_rd_en),
+        .wr_data(reg_wr_data),
+        .rd_data(reg_rd_data),
+        .img_width(img_width),
+        .img_height(img_height),
+        .scale_factor(scale_factor),
+        .mode_simd(mode_simd),
+        .simd_width(simd_width),
+        .start(start),
+        .step_mode(step_mode),
+        .step_next(step_next),
+        .busy(busy),
+        .ready(ready),
+        .error(error),
+        .progress(progress),
+        .flops_count(flops_count),
+        .mem_reads(mem_reads),
+        .mem_writes(mem_writes)
+    );
+
+    downscaler_fsm fsm (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(start),
+        .step_mode(step_mode),
+        .step_next(step_next),
+        .addr_gen_done(addr_gen_done),
+        .interp_valid(interp_valid_out),
+        .addr_gen_start(addr_gen_start),
+        .addr_gen_next(addr_gen_next),
+        .mem_fetch_en(mem_fetch_en),
+        .interp_en(interp_en),
+        .result_write_en(result_write_en),
+        .busy(busy),
+        .ready(ready),
+        .error(error)
+    );
+
+    address_generator addr_gen (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(addr_gen_start),
+        .src_width(img_width),
+        .src_height(img_height),
+        .scale_factor(scale_factor),
+        .addr_tl(addr_tl),
+        .addr_tr(addr_tr),
+        .addr_bl(addr_bl),
+        .addr_br(addr_br),
+        .weight_x(weight_x),
+        .weight_y(weight_y),
+        .valid(addr_gen_valid),
+        .done(addr_gen_done),
+        .next_pixel(addr_gen_next)
+    );
+
+    image_memory src_memory (
+        .clk(clk),
+        .rd_addr(src_mem_rd_addr),
+        .rd_data(src_mem_rd_data),
+        .wr_addr(img_wr_addr),
+        .wr_en(img_wr_en),
+        .wr_data(img_wr_data)
+    );
+
+    image_memory dst_memory (
+        .clk(clk),
+        .rd_addr(result_rd_addr),
+        .rd_data(result_rd_data),
+        .wr_addr(dst_mem_wr_addr),
+        .wr_en(dst_mem_wr_en),
+        .wr_data(dst_mem_wr_data)
+    );
+
+    bilinear_interpolator interpolator (
+        .clk(clk),
+        .rst_n(rst_n),
+        .valid_in(interp_valid_in),
+        .pixel_tl(pixel_tl),
+        .pixel_tr(pixel_tr),
+        .pixel_bl(pixel_bl),
+        .pixel_br(pixel_br),
+        .weight_x(weight_x),
+        .weight_y(weight_y),
+        .valid_out(interp_valid_out),
+        .pixel_out(pixel_out)
+    );
+
+    performance_counters perf_counters (
+        .clk(clk),
+        .rst_n(rst_n),
+        .clear(start),
+        .flop_inc(interp_valid_out),
+        .flop_count(32'd8),
+        .mem_read_inc(mem_fetch_en),
+        .mem_write_inc(result_write_en),
+        .total_flops(flops_count),
+        .total_mem_reads(mem_reads),
+        .total_mem_writes(mem_writes)
+    );
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pixel_tl <= 8'h0;
+            pixel_tr <= 8'h0;
+            pixel_bl <= 8'h0;
+            pixel_br <= 8'h0;
+            interp_valid_in <= 1'b0;
+            dst_mem_wr_addr <= 18'h0;
+            dst_mem_wr_en <= 1'b0;
+            dst_mem_wr_data <= 8'h0;
+            pixel_counter <= 32'h0;
+        end else begin
+            if (start) begin
+                pixel_counter <= 32'h0;
+            end
+
+            if (mem_fetch_en) begin
+                src_mem_rd_addr <= addr_tl;
+                pixel_tl <= src_mem_rd_data;
+                src_mem_rd_addr <= addr_tr;
+                pixel_tr <= src_mem_rd_data;
+                src_mem_rd_addr <= addr_bl;
+                pixel_bl <= src_mem_rd_data;
+                src_mem_rd_addr <= addr_br;
+                pixel_br <= src_mem_rd_data;
+            end
+
+            if (interp_en) begin
+                interp_valid_in <= 1'b1;
+            end else begin
+                interp_valid_in <= 1'b0;
+            end
+
+            if (result_write_en) begin
+                dst_mem_wr_en <= 1'b1;
+                dst_mem_wr_addr <= pixel_counter[17:0];
+                dst_mem_wr_data <= pixel_out;
+                pixel_counter <= pixel_counter + 1;
+            end else begin
+                dst_mem_wr_en <= 1'b0;
+            end
+        end
+    end
+
+    assign progress = pixel_counter;
+
+endmodule

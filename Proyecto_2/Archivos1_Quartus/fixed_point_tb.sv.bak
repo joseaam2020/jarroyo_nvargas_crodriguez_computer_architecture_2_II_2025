@@ -1,0 +1,75 @@
+import fixed_point_pkg::*;
+
+module tb_fixed_point;
+
+    logic clk;
+    fixed_point_t a, b, result;
+    real a_real, b_real, result_real, expected;
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        $display("=== Fixed Point Package Testbench ===\n");
+
+        a_real = 0.5;
+        b_real = 0.25;
+        a = to_fixed(a_real);
+        b = to_fixed(b_real);
+        result = fixed_mult(a, b);
+        result_real = to_real(result);
+        expected = a_real * b_real;
+
+        $display("Test 1: Multiplication 0.5 * 0.25");
+        $display("  Input A: %0.4f -> Fixed: %h", a_real, a);
+        $display("  Input B: %0.4f -> Fixed: %h", b_real, b);
+        $display("  Result: %0.4f (expected: %0.4f)", result_real, expected);
+        if ($abs(result_real - expected) < 0.01) begin
+            $display("  PASS\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        a_real = 1.0;
+        b_real = 1.0;
+        a = to_fixed(a_real);
+        b = to_fixed(b_real);
+        result = fixed_mult(a, b);
+        result_real = to_real(result);
+        expected = a_real * b_real;
+
+        $display("Test 2: Multiplication 1.0 * 1.0");
+        $display("  Input A: %0.4f -> Fixed: %h", a_real, a);
+        $display("  Input B: %0.4f -> Fixed: %h", b_real, b);
+        $display("  Result: %0.4f (expected: %0.4f)", result_real, expected);
+        if ($abs(result_real - expected) < 0.01) begin
+            $display("  PASS\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        a_real = 0.75;
+        b_real = 0.5;
+        a = to_fixed(a_real);
+        b = to_fixed(b_real);
+        result = fixed_add(a, b);
+        result_real = to_real(result);
+        expected = a_real + b_real;
+
+        $display("Test 3: Addition 0.75 + 0.5");
+        $display("  Input A: %0.4f -> Fixed: %h", a_real, a);
+        $display("  Input B: %0.4f -> Fixed: %h", b_real, b);
+        $display("  Result: %0.4f (expected: %0.4f)", result_real, expected);
+        if ($abs(result_real - expected) < 0.01) begin
+            $display("  PASS\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("=== All Fixed Point Tests Complete ===\n");
+        $finish;
+    end
+
+endmodule

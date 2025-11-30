@@ -1,0 +1,90 @@
+module tb_image_memory;
+
+    logic clk;
+    logic [17:0] rd_addr, wr_addr;
+    logic [7:0] rd_data, wr_data;
+    logic wr_en;
+
+    image_memory dut (
+        .clk(clk),
+        .rd_addr(rd_addr),
+        .rd_data(rd_data),
+        .wr_addr(wr_addr),
+        .wr_en(wr_en),
+        .wr_data(wr_data)
+    );
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        $display("=== Image Memory Testbench ===\n");
+
+        wr_en = 1'b0;
+        rd_addr = 18'h0;
+        wr_addr = 18'h0;
+        wr_data = 8'h0;
+        #20;
+
+        $display("Test 1: Write and read single pixel");
+        wr_addr = 18'h0;
+        wr_data = 8'hAB;
+        wr_en = 1'b1;
+        #10;
+        wr_en = 1'b0;
+        #10;
+
+        rd_addr = 18'h0;
+        #10;
+        $display("  Write 0xAB to addr 0x0");
+        $display("  Read from addr 0x0: 0x%h (expected: 0xAB)", rd_data);
+        if (rd_data == 8'hAB) begin
+            $display("  PASS\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("Test 2: Write multiple pixels");
+        for (int i = 0; i < 10; i++) begin
+            wr_addr = i[17:0];
+            wr_data = i[7:0] * 8'h11;
+            wr_en = 1'b1;
+            #10;
+        end
+        wr_en = 1'b0;
+        #10;
+
+        $display("  Written 10 pixels sequentially");
+        $display("  Reading back:\n");
+
+        for (int i = 0; i < 10; i++) begin
+            rd_addr = i[17:0];
+            #10;
+            $display("    addr[0x%h] = 0x%h (expected: 0x%h)", i, rd_data, i[7:0] * 8'h11);
+            if (rd_data == i[7:0] * 8'h11) begin
+                $display("    PASS");
+            end else begin
+                $display("    FAIL");
+            end
+        end
+
+        $display("\nTest 3: Concurrent read/write");
+        rd_addr = 18'h100;
+        wr_addr = 18'h200;
+        wr_data = 8'hCD;
+        wr_en = 1'b1;
+        #10;
+        wr_en = 1'b0;
+        #10;
+        $display("  Simultaneous read from 0x100 and write to 0x200");
+        $display("  Read result: 0x%h", rd_data);
+        $display("  Write data: 0xCD\n");
+
+        #20;
+        $display("=== All Image Memory Tests Complete ===\n");
+        $finish;
+    end
+
+endmodule

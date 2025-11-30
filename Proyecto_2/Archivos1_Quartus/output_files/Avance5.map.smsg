@@ -1,0 +1,1 @@
+Warning (10268): Verilog HDL information at address_generator.sv(66): always construct contains both blocking and non-blocking assignments File: /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/address_generator.sv Line: 66

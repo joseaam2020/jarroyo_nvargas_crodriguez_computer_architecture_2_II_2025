@@ -1,0 +1,138 @@
+import fixed_point_pkg::*;
+
+module tb_downscaler_top;
+
+    logic clk, rst_n;
+    logic [7:0] reg_addr;
+    logic reg_wr_en, reg_rd_en;
+    logic [31:0] reg_wr_data, reg_rd_data;
+    logic [17:0] img_wr_addr;
+    logic img_wr_en;
+    logic [7:0] img_wr_data;
+    logic [17:0] result_rd_addr;
+    logic [7:0] result_rd_data;
+
+    downscaler_top dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .reg_addr(reg_addr),
+        .reg_wr_en(reg_wr_en),
+        .reg_rd_en(reg_rd_en),
+        .reg_wr_data(reg_wr_data),
+        .reg_rd_data(reg_rd_data),
+        .img_wr_addr(img_wr_addr),
+        .img_wr_en(img_wr_en),
+        .img_wr_data(img_wr_data),
+        .result_rd_addr(result_rd_addr),
+        .result_rd_data(result_rd_data)
+    );
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    task write_reg(input [7:0] addr, input [31:0] data);
+        reg_addr = addr;
+        reg_wr_data = data;
+        reg_wr_en = 1'b1;
+        @(negedge clk);
+        reg_wr_en = 1'b0;
+        @(negedge clk);
+    endtask
+
+    task read_reg(input [7:0] addr);
+        reg_addr = addr;
+        reg_rd_en = 1'b1;
+        @(negedge clk);
+        reg_rd_en = 1'b0;
+        @(negedge clk);
+    endtask
+
+    task load_image(input [9:0] width, input [9:0] height);
+        integer addr, pixel;
+        $display("\nLoading %d x %d test image", width, height);
+        for (addr = 0; addr < width * height; addr++) begin
+            img_wr_addr = addr[17:0];
+            pixel = (addr % 256);
+            img_wr_data = pixel[7:0];
+            img_wr_en = 1'b1;
+            @(negedge clk);
+        end
+        img_wr_en = 1'b0;
+        $display("Image load complete\n");
+    endtask
+
+    initial begin
+        $display("=== Downscaler Top Testbench ===\n");
+
+        rst_n = 1'b0;
+        reg_wr_en = 1'b0;
+        reg_rd_en = 1'b0;
+        img_wr_en = 1'b0;
+        #20;
+        rst_n = 1'b1;
+        #20;
+
+        $display("Test 1: Configure processor");
+        $display("  Setting image dimensions: 256x256");
+        write_reg(8'h00, 32'h0100);
+        write_reg(8'h01, 32'h0100);
+
+        $display("  Setting scale factor: 0.5");
+        write_reg(8'h02, 32'h0080);
+
+        $display("  Setting mode: Sequential (0)");
+        write_reg(8'h03, 32'h00000000);
+
+        $display("  Verifying settings:\n");
+        read_reg(8'h00);
+        $display("  Image width: 0x%h", reg_rd_data);
+
+        read_reg(8'h01);
+        $display("  Image height: 0x%h", reg_rd_data);
+
+        read_reg(8'h02);
+        $display("  Scale factor: 0x%h\n", reg_rd_data);
+
+        $display("Test 2: Load test image");
+        load_image(10'd256, 10'd256);
+
+        $display("Test 3: Start processing");
+        write_reg(8'h04, 32'h00000001);
+        $display("  Processing started\n");
+
+        repeat(5) begin
+            @(negedge clk);
+            read_reg(8'h05);
+            $display("  Status: 0x%h", reg_rd_data);
+        end
+
+        $display("\nTest 4: Read performance counters");
+        repeat(10) @(negedge clk);
+
+        read_reg(8'h06);
+        $display("  Progress: %d pixels", reg_rd_data);
+
+        read_reg(8'h07);
+        $display("  FLOPs: %d", reg_rd_data);
+
+        read_reg(8'h08);
+        $display("  Memory Reads: %d", reg_rd_data);
+
+        read_reg(8'h09);
+        $display("  Memory Writes: %d\n", reg_rd_data);
+
+        $display("Test 5: Read result image");
+        for (int i = 0; i < 10; i++) begin
+            result_rd_addr = i[17:0];
+            @(negedge clk);
+            $display("  result_mem[0x%h] = 0x%h", i, result_rd_data);
+        end
+
+        #50;
+        $display("\n=== All Top Module Tests Complete ===\n");
+        $finish;
+    end
+
+endmodule

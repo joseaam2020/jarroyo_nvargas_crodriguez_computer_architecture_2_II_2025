@@ -1,0 +1,148 @@
+import fixed_point_pkg::*;
+
+module tb_address_generator;
+
+    logic clk, rst_n;
+    logic start;
+    logic [9:0] src_width, src_height;
+    logic [15:0] scale_factor;
+    logic [17:0] addr_tl, addr_tr, addr_bl, addr_br;
+    fixed_point_t weight_x, weight_y;
+    logic valid, done;
+    logic next_pixel;
+
+    // -------------------------------------------------------
+    // INSTANTIAR EL address_generator
+    // -------------------------------------------------------
+    address_generator dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(start),
+        .src_width(src_width),
+        .src_height(src_height),
+        .scale_factor(scale_factor),
+        .addr_tl(addr_tl),
+        .addr_tr(addr_tr),
+        .addr_bl(addr_bl),
+        .addr_br(addr_br),
+        .weight_x(weight_x),
+        .weight_y(weight_y),
+        .valid(valid),
+        .done(done),
+        .next_pixel(next_pixel)
+    );
+
+    // -------------------------------------------------------
+    // CLOCK
+    // -------------------------------------------------------
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    // -------------------------------------------------------
+    // RESET + PRUEBAS
+    // -------------------------------------------------------
+    initial begin
+        $display("=== Address Generator Testbench ===\n");
+
+        rst_n = 1'b0;
+        start = 1'b0;
+        next_pixel = 1'b0;
+
+        src_width  = 10'd512;
+        src_height = 10'd512;
+
+        scale_factor = 16'h0080;  // 0.5
+        #25;
+        rst_n = 1'b1;
+        #20;
+
+        // ====================================================
+        // Test 1 — scale = 0.5
+        // ====================================================
+        $display("Test 1: Scale factor 0.5");
+        $display("  Source: 512x512  → Expected: 256x256\n");
+
+        @(negedge clk);
+        start = 1'b1;
+        @(negedge clk);
+        start = 1'b0;
+
+        repeat(20) begin
+            @(posedge clk);
+            $display("  valid=%b | addr_tl=0x%h | wX=%h | wY=%h",
+                    valid, addr_tl, weight_x, weight_y);
+
+            if (valid) begin
+                next_pixel = 1'b1;
+            end
+            @(posedge clk);
+            next_pixel = 1'b0;
+        end
+
+        // ====================================================
+        // Test 2 — scale = 1.0
+        // ====================================================
+        $display("\nTest 2: Scale factor 1.0\n");
+
+        rst_n = 1'b0;
+        #10;
+        rst_n = 1'b1;
+        scale_factor = 16'h0100;
+
+        @(negedge clk);
+        start = 1'b1;
+        @(negedge clk);
+        start = 1'b0;
+
+        repeat(20) begin
+            @(posedge clk);
+            $display("  valid=%b | addr_tl=0x%h | wX=%h | wY=%h",
+                     valid, addr_tl, weight_x, weight_y);
+
+            if (valid)
+                next_pixel = 1'b1;
+
+            @(posedge clk);
+            next_pixel = 1'b0;
+        end
+
+        #20;
+        $display("\n=== TESTBENCH COMPLETO ===\n");
+        $finish;
+    end
+
+endmodule
+
+// =======================================================
+// MÓDULO DIVISOR USADO POR address_generator
+// =======================================================
+module fp_div #(
+    parameter WIDTH = 20
+)(
+    input  logic                  clk,
+    input  logic                  start,
+    input  logic [WIDTH-1:0]      dividend,
+    input  logic [15:0]           divisor,
+    output logic [WIDTH-1:0]      quotient,
+    output logic                  ready
+);
+
+    typedef enum logic [1:0] {IDLE, BUSY, DONE} div_state_t;
+    div_state_t state;
+
+    always_ff @(posedge clk) begin
+        if (state == IDLE) begin
+            ready <= 0;
+            if (start)
+                state <= BUSY;
+        end else if (state == BUSY) begin
+            quotient <= dividend / divisor; // OK en simulación
+            state    <= DONE;
+        end else begin
+            ready <= 1;
+            state <= IDLE;
+        end
+    end
+endmodule

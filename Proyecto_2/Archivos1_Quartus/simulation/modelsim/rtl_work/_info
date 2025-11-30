@@ -1,0 +1,147 @@
+m255
+K4
+z2
+!s11f vlog 2020.1 2020.02, Feb 28 2020
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+Z0 d/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/simulation/modelsim
+vbilinear_interpolator
+Z1 DXx6 sv_std 3 std 0 22 VYECXdT12H8WgbUP_5Y6:3
+Z2 DXx4 work 15 fixed_point_pkg 0 22 2XU^cjzR4amdX9_:NDEAm0
+DXx4 work 29 bilinear_interpolator_sv_unit 0 22 C5Zd94ekh=aiX??`Sb@Jc0
+Z3 !s110 1764479823
+Z4 VDg1SIo80bB@j0V0VzS_@n1
+r1
+!s85 0
+!i10b 1
+!s100 9?@<ejHE1FTELjLS5GhKl1
+Iz`e8hC2h]ljH@^cULc>;H0
+!s105 bilinear_interpolator_sv_unit
+S1
+R0
+Z5 w1764446422
+Z6 8/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv
+Z7 F/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv
+!i122 1
+L0 3 65
+Z8 OV;L;2020.1;71
+31
+Z9 !s108 1764479823.000000
+Z10 !s107 /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv|
+Z11 !s90 -reportprogress|300|-sv|-work|work|+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus|/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator.sv|
+!i113 1
+Z12 o-sv -work work
+Z13 !s92 -sv -work work +incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus
+Z14 tCvgOpt 0
+Xbilinear_interpolator_sv_unit
+R1
+R2
+R3
+VC5Zd94ekh=aiX??`Sb@Jc0
+r1
+!s85 0
+!i10b 1
+!s100 =hf1@DQzHo[Okd4lfZ>Z@1
+IC5Zd94ekh=aiX??`Sb@Jc0
+!i103 1
+S1
+R0
+R5
+R6
+R7
+!i122 1
+Z15 L0 1 0
+R8
+31
+R9
+R10
+R11
+!i113 1
+R12
+R13
+R14
+Xbilinear_interpolator_tb_sv_unit
+R1
+R2
+R3
+V9<A`7Q=zPHgOnS33?h_d<1
+r1
+!s85 0
+!i10b 1
+!s100 REBgj4gmAi;;V=cIGWa7^2
+I9<A`7Q=zPHgOnS33?h_d<1
+!i103 1
+S1
+R0
+Z16 w1764479772
+Z17 8/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv
+Z18 F/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv
+!i122 2
+R15
+R8
+31
+R9
+!s107 /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv|
+Z19 !s90 -reportprogress|300|-sv|-work|work|+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus|/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv|
+!i113 1
+R12
+R13
+R14
+Xfixed_point_pkg
+R1
+R3
+!i10b 1
+!s100 QJDf20=@i@KdX<:]<l]c80
+!s11b Dg1SIo80bB@j0V0VzS_@n1
+I2XU^cjzR4amdX9_:NDEAm0
+V2XU^cjzR4amdX9_:NDEAm0
+S1
+R0
+w1764445235
+8/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv
+F/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv
+!i122 0
+R15
+R8
+r1
+!s85 0
+31
+R9
+!s107 /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv|
+!s90 -reportprogress|300|-sv|-work|work|+incdir+/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus|/home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/fixed_point_pkg.sv|
+!i113 1
+R12
+R13
+R14
+vtb_bilinear_interpolator
+R1
+R2
+DXx4 work 32 bilinear_interpolator_tb_sv_unit 0 22 9<A`7Q=zPHgOnS33?h_d<1
+R3
+R4
+r1
+!s85 0
+!i10b 1
+!s100 ?3QRgU4n`R8CBeWZXan:91
+IGb=o;G8zZ>54Q4KRVNdl01
+!s105 bilinear_interpolator_tb_sv_unit
+S1
+R0
+R16
+R17
+R18
+!i122 2
+L0 3 129
+R8
+31
+R9
+Z20 !s107 /home/noemi/Documentos/Arqui/Proyecto2/Avance5-codigoQuartus/bilinear_interpolator_tb.sv|
+R19
+!i113 1
+R12
+R13
+R14

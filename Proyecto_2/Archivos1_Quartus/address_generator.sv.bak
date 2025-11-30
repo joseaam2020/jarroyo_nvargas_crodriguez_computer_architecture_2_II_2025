@@ -1,0 +1,104 @@
+import fixed_point_pkg::*;
+
+module address_generator (
+    input  logic        clk,
+    input  logic        rst_n,
+
+    input  logic        start,
+    input  logic [9:0]  src_width,
+    input  logic [9:0]  src_height,
+    input  logic [15:0] scale_factor,
+
+    output logic [17:0] addr_tl,
+    output logic [17:0] addr_tr,
+    output logic [17:0] addr_bl,
+    output logic [17:0] addr_br,
+    output fixed_point_t weight_x,
+    output fixed_point_t weight_y,
+    output logic        valid,
+    output logic        done,
+
+    input  logic        next_pixel
+);
+
+    logic [9:0] dst_width, dst_height;
+    logic [9:0] dst_x, dst_y;
+
+    logic [19:0] src_x_fixed, src_y_fixed;
+    logic [9:0]  src_x_int, src_y_int;
+    logic [7:0]  src_x_frac, src_y_frac;
+
+    typedef enum logic [1:0] {
+        IDLE,
+        PROCESSING,
+        DONE
+    } state_t;
+
+    state_t state;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            dst_x <= 10'h0;
+            dst_y <= 10'h0;
+            valid <= 1'b0;
+            done <= 1'b0;
+        end else begin
+            case (state)
+                IDLE: begin
+                    if (start) begin
+                        dst_width <= (src_width * scale_factor) >> 8;
+                        dst_height <= (src_height * scale_factor) >> 8;
+                        dst_x <= 10'h0;
+                        dst_y <= 10'h0;
+                        state <= PROCESSING;
+                        valid <= 1'b1;
+                        done <= 1'b0;
+                    end
+                end
+
+                PROCESSING: begin
+                    if (next_pixel) begin
+                        if (dst_x == dst_width - 1) begin
+                            dst_x <= 10'h0;
+                            if (dst_y == dst_height - 1) begin
+                                state <= DONE;
+                                valid <= 1'b0;
+                                done <= 1'b1;
+                            end else begin
+                                dst_y <= dst_y + 1;
+                            end
+                        end else begin
+                            dst_x <= dst_x + 1;
+                        end
+                    end
+                end
+
+                DONE: begin
+                    done <= 1'b1;
+                    valid <= 1'b0;
+                end
+            endcase
+        end
+    end
+
+    always_comb begin
+        src_x_fixed = (dst_x << 8) / scale_factor;
+        src_y_fixed = (dst_y << 8) / scale_factor;
+
+        src_x_int = src_x_fixed[17:8];
+        src_y_int = src_y_fixed[17:8];
+        src_x_frac = src_x_fixed[7:0];
+        src_y_frac = src_y_fixed[7:0];
+
+        weight_x = {8'h0, src_x_frac};
+        weight_y = {8'h0, src_y_frac};
+
+        addr_tl = src_y_int * src_width + src_x_int;
+        addr_tr = (src_x_int < src_width - 1) ? (src_y_int * src_width + src_x_int + 1) : addr_tl;
+        addr_bl = (src_y_int < src_height - 1) ? ((src_y_int + 1) * src_width + src_x_int) : addr_tl;
+        addr_br = ((src_x_int < src_width - 1) && (src_y_int < src_height - 1)) ?
+                  ((src_y_int + 1) * src_width + src_x_int + 1) : addr_tl;
+    end
+
+endmodule

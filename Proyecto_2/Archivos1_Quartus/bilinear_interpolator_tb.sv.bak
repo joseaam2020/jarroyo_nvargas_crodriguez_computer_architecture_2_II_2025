@@ -1,0 +1,88 @@
+import fixed_point_pkg::*;
+
+module tb_bilinear_interpolator;
+
+    logic clk, rst_n;
+    logic valid_in;
+    logic [7:0] pixel_tl, pixel_tr, pixel_bl, pixel_br;
+    fixed_point_t weight_x, weight_y;
+    logic valid_out;
+    logic [7:0] pixel_out;
+
+    bilinear_interpolator dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .valid_in(valid_in),
+        .pixel_tl(pixel_tl),
+        .pixel_tr(pixel_tr),
+        .pixel_bl(pixel_bl),
+        .pixel_br(pixel_br),
+        .weight_x(weight_x),
+        .weight_y(weight_y),
+        .valid_out(valid_out),
+        .pixel_out(pixel_out)
+    );
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    task apply_test(input string name, input [7:0] tl, tr, bl, br,
+                    input real wx, wy, input [7:0] expected);
+        @(negedge clk);
+        pixel_tl = tl;
+        pixel_tr = tr;
+        pixel_bl = bl;
+        pixel_br = br;
+        weight_x = to_fixed(wx);
+        weight_y = to_fixed(wy);
+        valid_in = 1'b1;
+        @(negedge clk);
+        valid_in = 1'b0;
+        repeat(3) @(negedge clk);
+
+        $display("Test: %s", name);
+        $display("  Input: TL=%d, TR=%d, BL=%d, BR=%d", tl, tr, bl, br);
+        $display("  Weights: wx=%0.2f, wy=%0.2f", wx, wy);
+        $display("  Output: %d (expected: %d)", pixel_out, expected);
+        if (pixel_out == expected) begin
+            $display("  PASS\n");
+        end else begin
+            $display("  FAIL (error: %d)\n", $signed(pixel_out) - $signed(expected));
+        end
+    endtask
+
+    initial begin
+        $display("=== Bilinear Interpolator Testbench ===\n");
+
+        rst_n = 1'b0;
+        valid_in = 1'b0;
+        pixel_tl = 8'h0;
+        pixel_tr = 8'h0;
+        pixel_bl = 8'h0;
+        pixel_br = 8'h0;
+        weight_x = 16'h0;
+        weight_y = 16'h0;
+        #20;
+        rst_n = 1'b1;
+        #20;
+
+        apply_test("All pixels equal", 8'd100, 8'd100, 8'd100, 8'd100, 0.5, 0.5, 8'd100);
+
+        apply_test("No interpolation (0,0)", 8'd50, 8'd100, 8'd100, 8'd100, 0.0, 0.0, 8'd50);
+
+        apply_test("Horizontal interpolation", 8'd50, 8'd100, 8'd50, 8'd100, 0.5, 0.0, 8'd75);
+
+        apply_test("Vertical interpolation", 8'd50, 8'd50, 8'd100, 8'd100, 0.0, 0.5, 8'd75);
+
+        apply_test("Full bilinear (center)", 8'd0, 8'd100, 8'd100, 8'd200, 0.5, 0.5, 8'd100);
+
+        apply_test("Quarter interpolation", 8'd100, 8'd100, 8'd100, 8'd100, 0.25, 0.25, 8'd100);
+
+        #20;
+        $display("=== All Bilinear Interpolator Tests Complete ===\n");
+        $finish;
+    end
+
+endmodule

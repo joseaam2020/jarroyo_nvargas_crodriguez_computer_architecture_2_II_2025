@@ -1,0 +1,165 @@
+module tb_downscaler_fsm;
+
+    logic clk, rst_n;
+    logic start, step_mode, step_next;
+    logic addr_gen_done, interp_valid;
+    logic addr_gen_start, addr_gen_next, mem_fetch_en, interp_en, result_write_en;
+    logic busy, ready, error;
+
+    downscaler_fsm dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(start),
+        .step_mode(step_mode),
+        .step_next(step_next),
+        .addr_gen_done(addr_gen_done),
+        .interp_valid(interp_valid),
+        .addr_gen_start(addr_gen_start),
+        .addr_gen_next(addr_gen_next),
+        .mem_fetch_en(mem_fetch_en),
+        .interp_en(interp_en),
+        .result_write_en(result_write_en),
+        .busy(busy),
+        .ready(ready),
+        .error(error)
+    );
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        $display("=== Downscaler FSM Testbench ===\n");
+
+        rst_n = 1'b0;
+        start = 1'b0;
+        step_mode = 1'b0;
+        step_next = 1'b0;
+        addr_gen_done = 1'b0;
+        interp_valid = 1'b0;
+        #20;
+        rst_n = 1'b1;
+        #20;
+
+        $display("Test 1: Initial state");
+        $display("  busy=%b, ready=%b, error=%b", busy, ready, error);
+        if (ready == 1'b1 && busy == 1'b0) begin
+            $display("  PASS: System ready\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("Test 2: Start processing (no stepping)");
+        start = 1'b1;
+        #10;
+        start = 1'b0;
+        @(negedge clk);
+        $display("  addr_gen_start=%b (expected: 1)", addr_gen_start);
+        if (addr_gen_start == 1'b1) begin
+            $display("  PASS: Address generation started\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("Test 3: Sequential processing");
+        @(negedge clk);
+        @(negedge clk);
+        interp_valid = 1'b1;
+        @(negedge clk);
+        interp_valid = 1'b0;
+        @(negedge clk);
+        $display("  result_write_en=%b (expected: 1)", result_write_en);
+        if (result_write_en == 1'b1) begin
+            $display("  PASS: Result written\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        @(negedge clk);
+        addr_gen_done = 1'b0;
+        $display("  addr_gen_next=%b (expected: 1)", addr_gen_next);
+        if (addr_gen_next == 1'b1) begin
+            $display("  PASS: Next pixel requested\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("\nTest 4: Step-by-step mode");
+        #50;
+        rst_n = 1'b0;
+        #10;
+        rst_n = 1'b1;
+        step_mode = 1'b1;
+        #20;
+
+        start = 1'b1;
+        #10;
+        start = 1'b0;
+        @(negedge clk);
+        @(negedge clk);
+        @(negedge clk);
+
+        interp_valid = 1'b1;
+        @(negedge clk);
+        interp_valid = 1'b0;
+        @(negedge clk);
+        @(negedge clk);
+
+        $display("  Stepped to result_write_en");
+        $display("  busy=%b (expected: 1)", busy);
+        if (busy == 1'b1) begin
+            $display("  PASS: Waiting for step\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        step_next = 1'b1;
+        @(negedge clk);
+        step_next = 1'b0;
+        @(negedge clk);
+
+        $display("  After step_next");
+        $display("  addr_gen_next=%b (expected: 1)", addr_gen_next);
+        if (addr_gen_next == 1'b1) begin
+            $display("  PASS: Next pixel triggered by step\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        $display("\nTest 5: Completion");
+        #50;
+        rst_n = 1'b0;
+        #10;
+        rst_n = 1'b1;
+        step_mode = 1'b0;
+        #20;
+
+        start = 1'b1;
+        #10;
+        start = 1'b0;
+
+        repeat(10) begin
+            @(negedge clk);
+            if (interp_valid == 1'b0) interp_valid = 1'b1;
+            else interp_valid = 1'b0;
+        end
+
+        addr_gen_done = 1'b1;
+        @(negedge clk);
+        @(negedge clk);
+
+        $display("  addr_gen_done asserted");
+        $display("  ready=%b (expected: 1)", ready);
+        if (ready == 1'b1 && busy == 1'b0) begin
+            $display("  PASS: Processing complete\n");
+        end else begin
+            $display("  FAIL\n");
+        end
+
+        #20;
+        $display("=== All FSM Tests Complete ===\n");
+        $finish;
+    end
+
+endmodule

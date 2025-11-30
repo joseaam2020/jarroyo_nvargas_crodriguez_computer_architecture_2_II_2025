@@ -1,0 +1,110 @@
+module downscaler_fsm (
+    input  logic        clk,
+    input  logic        rst_n,
+
+    input  logic        start,
+    input  logic        step_mode,
+    input  logic        step_next,
+
+    input  logic        addr_gen_done,
+    input  logic        interp_valid,
+
+    output logic        addr_gen_start,
+    output logic        addr_gen_next,
+    output logic        mem_fetch_en,
+    output logic        interp_en,
+    output logic        result_write_en,
+
+    output logic        busy,
+    output logic        ready,
+    output logic        error
+);
+
+    typedef enum logic [2:0] {
+        IDLE,
+        FETCH,
+        INTERPOLATE,
+        WRITE,
+        STEP_WAIT,
+        DONE
+    } state_t;
+
+    state_t state, next_state;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= IDLE;
+        end else begin
+            state <= next_state;
+        end
+    end
+
+    always_comb begin
+        next_state = state;
+        addr_gen_start = 1'b0;
+        addr_gen_next = 1'b0;
+        mem_fetch_en = 1'b0;
+        interp_en = 1'b0;
+        result_write_en = 1'b0;
+        busy = 1'b0;
+        ready = 1'b0;
+        error = 1'b0;
+
+        case (state)
+            IDLE: begin
+                ready = 1'b1;
+                if (start) begin
+                    next_state = FETCH;
+                    addr_gen_start = 1'b1;
+                end
+            end
+
+            FETCH: begin
+                busy = 1'b1;
+                mem_fetch_en = 1'b1;
+                next_state = INTERPOLATE;
+            end
+
+            INTERPOLATE: begin
+                busy = 1'b1;
+                interp_en = 1'b1;
+                if (interp_valid) begin
+                    next_state = WRITE;
+                end
+            end
+
+            WRITE: begin
+                busy = 1'b1;
+                result_write_en = 1'b1;
+                if (step_mode) begin
+                    next_state = STEP_WAIT;
+                end else begin
+                    if (addr_gen_done) begin
+                        next_state = DONE;
+                    end else begin
+                        next_state = FETCH;
+                        addr_gen_next = 1'b1;
+                    end
+                end
+            end
+
+            STEP_WAIT: begin
+                busy = 1'b1;
+                if (step_next) begin
+                    if (addr_gen_done) begin
+                        next_state = DONE;
+                    end else begin
+                        next_state = FETCH;
+                        addr_gen_next = 1'b1;
+                    end
+                end
+            end
+
+            DONE: begin
+                ready = 1'b1;
+                next_state = IDLE;
+            end
+        endcase
+    end
+
+endmodule

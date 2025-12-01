@@ -1,0 +1,131 @@
+`timescale 1ns/1ps
+import fixed_point_pkg::*;
+
+module bilinear_downscaler_stepping_tb;
+
+  logic clk, rst_n;
+  logic [7:0]  ctrl_addr;
+  logic        ctrl_wr_en, ctrl_rd_en;
+  logic [31:0] ctrl_wr_data, ctrl_rd_data;
+  logic        processing_active, processing_complete;
+
+  // Señales internas útiles
+  logic internal_busy, internal_ready;
+  logic addr_gen_next;
+  logic interpolate_valid_in, interpolate_valid_out;
+  logic result_write_en;
+  logic [3:0] fetch_state;
+  logic [9:0] dst_x, dst_y;
+
+  // DUT
+  bilinear_downscaler_top dut (
+    .clk(clk),
+    .rst_n(rst_n),
+    .ctrl_addr(ctrl_addr),
+    .ctrl_wr_en(ctrl_wr_en),
+    .ctrl_rd_en(ctrl_rd_en),
+    .ctrl_wr_data(ctrl_wr_data),
+    .ctrl_rd_data(ctrl_rd_data),
+    .processing_active(processing_active),
+    .processing_complete(processing_complete)
+  );
+
+  // Señales internas
+  assign internal_busy          = dut.busy;
+  assign internal_ready         = dut.ready;
+  assign addr_gen_next          = dut.addr_gen_next;
+  assign fetch_state            = dut.fetch_state;
+  assign interpolate_valid_in   = dut.interpolate_valid_in;
+  assign interpolate_valid_out  = dut.interpolate_valid_out;
+  assign result_write_en        = dut.result_write_en;
+  assign dst_x                  = dut.addr_gen_inst.dst_x;
+  assign dst_y                  = dut.addr_gen_inst.dst_y;
+
+  // Clock
+  initial begin
+    clk = 0;
+    forever #5 clk = ~clk;
+  end
+
+  // Reset
+  task reset_system();
+    $display("\n============== RESET SYSTEM ==============");
+    rst_n = 0;
+    ctrl_wr_en = 0;
+    ctrl_rd_en = 0;
+    ctrl_wr_data = 0;
+    ctrl_addr = 0;
+    repeat (10) @(posedge clk);
+    rst_n = 1;
+    repeat (10) @(posedge clk);
+    $display("Reset complete. ready=%b busy=%b\n", internal_ready, internal_busy);
+  endtask
+
+  // Write
+  task write_reg(input [7:0] addr, input [31:0] data);
+    @(posedge clk);
+    ctrl_addr = addr;
+    ctrl_wr_data = data;
+    ctrl_wr_en = 1;
+    @(posedge clk);
+    ctrl_wr_en = 0;
+    repeat(2) @(posedge clk);
+  endtask
+
+  // MAIN: solo stepping
+  initial begin
+    integer cycle_count = 0;
+    integer timeout = 2000;
+
+    $display("\n==========================================");
+    $display("  BILINEAR DOWNSCALER – STEPPING TB ONLY  ");
+    $display("==========================================\n");
+
+    reset_system();
+
+    // Configuración mínima
+    write_reg(8'h00, 8);        // width
+    write_reg(8'h01, 8);        // height
+    write_reg(8'h02, 32'h0080); // scale 0.5x
+    write_reg(8'h03, 0);        // SIMD = 0 (secuencial)
+
+    repeat(5) @(posedge clk);
+
+    // Start
+    $display("▶ Start processing...");
+    write_reg(8'h04, 32'h1);
+
+    // Wait for busy
+    while (!internal_busy) @(posedge clk);
+
+    $display("\nStepping pipeline:\n");
+    $display("Cycle | Busy | Fetch | AddrNext | In | Out | Write | (X,Y)");
+
+    // STEPPING LOOP
+    while (!processing_complete && cycle_count < timeout) begin
+      @(posedge clk);
+      cycle_count++;
+
+      $display("%5d |   %b  |   %2d  |    %b     |  %b |  %b  |   %b   | (%2d,%2d)",
+        cycle_count,
+        internal_busy,
+        fetch_state,
+        addr_gen_next,
+        interpolate_valid_in,
+        interpolate_valid_out,
+        result_write_en,
+        dst_x,
+        dst_y
+      );
+    end
+
+    if (cycle_count >= timeout)
+      $display("\n✗ TIMEOUT after %0d cycles\n", timeout);
+    else
+      $display("\n✓ COMPLETE at cycle %0d\n", cycle_count);
+
+    repeat(20) @(posedge clk);
+    $finish;
+  end
+
+endmodule

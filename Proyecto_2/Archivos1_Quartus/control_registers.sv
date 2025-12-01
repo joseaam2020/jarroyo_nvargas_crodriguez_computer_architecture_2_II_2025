@@ -54,14 +54,14 @@ module control_registers #(
         if (!rst_n) begin
             img_width_reg    <= 10'd512;
             img_height_reg   <= 10'd512;
-            scale_factor_reg <= 16'h0100;
+            scale_factor_reg <= 16'h0100;  // 1.0x por defecto
             mode_simd_reg    <= 1'b0;
-            simd_width_reg   <= 3'd4;
+            simd_width_reg   <= 3'd0;      // Sequential mode por defecto
             start_reg        <= 1'b0;
             step_mode_reg    <= 1'b0;
             step_next_reg    <= 1'b0;
         end else begin
-            // Los pulsos se auto-limpian
+            // Los pulsos se auto-limpian después de 1 ciclo
             start_reg <= 1'b0;
             step_next_reg <= 1'b0;
 
@@ -70,15 +70,19 @@ module control_registers #(
                     ADDR_IMG_WIDTH:    img_width_reg    <= wr_data[9:0];
                     ADDR_IMG_HEIGHT:   img_height_reg   <= wr_data[9:0];
                     ADDR_SCALE_FACTOR: scale_factor_reg <= wr_data[15:0];
+                    
                     ADDR_MODE: begin
-                        mode_simd_reg  <= wr_data[0];
-                        simd_width_reg <= wr_data[3:1];
+                        // Bits [2:0] = simd_width (0 = sequential, 1-8 = SIMD lanes)
+                        simd_width_reg <= wr_data[2:0];
+                        mode_simd_reg  <= (wr_data[2:0] != 3'd0);  // Auto-detect SIMD mode
                     end
+                    
                     ADDR_CONTROL: begin
                         start_reg     <= wr_data[0];
                         step_mode_reg <= wr_data[1];
-                        step_next_reg <= wr_data[2];
+                        step_next_reg <= wr_data[8];  // bit 8 para step_next
                     end
+                    
                     default: begin
                         // No hacer nada para direcciones no reconocidas
                     end
@@ -87,26 +91,28 @@ module control_registers #(
         end
     end
 
+    // Lectura de registros
     always_comb begin
-        rd_data = 32'h0;  // Valor por defecto
+        rd_data = 32'h0;
         
         if (rd_en) begin
             case (addr)
                 ADDR_IMG_WIDTH:    rd_data = {22'h0, img_width_reg};
                 ADDR_IMG_HEIGHT:   rd_data = {22'h0, img_height_reg};
                 ADDR_SCALE_FACTOR: rd_data = {16'h0, scale_factor_reg};
-                ADDR_MODE:         rd_data = {28'h0, simd_width_reg, mode_simd_reg};
-                ADDR_CONTROL:      rd_data = {29'h0, step_mode_reg, 1'b0, start_reg};
+                ADDR_MODE:         rd_data = {28'h0, mode_simd_reg, simd_width_reg};
+                ADDR_CONTROL:      rd_data = {23'h0, step_next_reg, 6'h0, step_mode_reg, start_reg};
                 ADDR_STATUS:       rd_data = {29'h0, error, busy, ready};
                 ADDR_PROGRESS:     rd_data = progress;
                 ADDR_FLOPS:        rd_data = flops_count;
                 ADDR_MEM_READS:    rd_data = mem_reads;
                 ADDR_MEM_WRITES:   rd_data = mem_writes;
-                default:           rd_data = 32'h0;  // Direcciones no reconocidas retornan 0
+                default:           rd_data = 32'h0;
             endcase
         end
     end
 
+    // Salidas
     assign img_width    = img_width_reg;
     assign img_height   = img_height_reg;
     assign scale_factor = scale_factor_reg;

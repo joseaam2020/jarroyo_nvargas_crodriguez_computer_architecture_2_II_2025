@@ -1,0 +1,178 @@
+`timescale 1ns/1ps
+
+module top_downscaler_simd_stepping_tb;
+
+  // ------------------------------------------------------------------
+  // Configuraciones básicas
+  // ------------------------------------------------------------------
+  localparam integer CLK_PERIOD_NS = 10;
+  localparam integer MAX_CYCLES = 1200;
+
+  localparam logic [7:0]
+    ADDR_IMG_WIDTH  = 8'h00,
+    ADDR_IMG_HEIGHT = 8'h01,
+    ADDR_SCALE      = 8'h02,
+    ADDR_MODE       = 8'h03,
+    ADDR_CONTROL    = 8'h04;
+
+  localparam logic [31:0]
+    CTRL_START      = 32'h1,
+    CTRL_STEP_MODE  = 32'h2,
+    CTRL_STEP_NEXT  = 32'h1 << 8;
+
+  // ------------------------------------------------------------------
+  // Señales de testbench
+  // ------------------------------------------------------------------
+  logic        clk;
+  logic        rst_n;
+  logic [7:0]  reg_addr;
+  logic        reg_wr_en;
+  logic        reg_rd_en;
+  logic [31:0] reg_wr_data;
+  logic [31:0] reg_rd_data;
+  logic        ready;
+  logic        busy;
+  logic        error;
+
+  // ------------------------------------------------------------------
+  // DUT (SIMD)
+  // ------------------------------------------------------------------
+  top_downscaler_simd #(
+    .SIMD_WIDTH(8)
+  ) dut (
+    .clk(clk),
+    .rst_n(rst_n),
+    .reg_addr(reg_addr),
+    .reg_wr_en(reg_wr_en),
+    .reg_rd_en(reg_rd_en),
+    .reg_wr_data(reg_wr_data),
+    .reg_rd_data(reg_rd_data),
+    .mem_wr_addr(),
+    .mem_wr_en(),
+    .mem_wr_data(),
+    .ready(ready),
+    .busy(busy),
+    .error(error)
+  );
+
+  // ------------------------------------------------------------------
+  // Señales internas para monitor
+  // ------------------------------------------------------------------
+  wire [2:0] fsm_state        = dut.fsm.state;
+  wire       addr_gen_valid   = dut.addr_gen_valid;
+  wire       interp_valid_out = dut.interp_valid_out;
+  wire       result_write_en  = dut.result_write_en;
+  wire [7:0] lanes_active     = dut.lane_valid;
+  wire       in_step_wait     = (fsm_state == 3'd4);
+
+  // ------------------------------------------------------------------
+  // Reloj
+  // ------------------------------------------------------------------
+  initial begin
+    clk = 1'b0;
+    forever #(CLK_PERIOD_NS / 2) clk = ~clk;
+  end
+
+  // ------------------------------------------------------------------
+  // Tareas auxiliares
+  // ------------------------------------------------------------------
+  task write_reg(input logic [7:0] addr, input logic [31:0] data);
+    begin
+      @(posedge clk);
+      reg_addr    <= addr;
+      reg_wr_data <= data;
+      reg_wr_en   <= 1;
+      reg_rd_en   <= 0;
+      @(posedge clk);
+      reg_wr_en   <= 0;
+      reg_wr_data <= 0;
+    end
+  endtask
+
+  task pulse_step_next();
+    begin
+      write_reg(ADDR_CONTROL, CTRL_STEP_MODE | CTRL_STEP_NEXT);
+    end
+  endtask
+
+  task configure_and_start();
+    begin
+      write_reg(ADDR_IMG_WIDTH,  32'd16);      // ancho de destino
+      write_reg(ADDR_IMG_HEIGHT, 32'd16);      // alto de destino
+      write_reg(ADDR_SCALE,      32'h0100);    // 1.0 (fixed point 8.8)
+      write_reg(ADDR_MODE,       32'd8);       // habilita SIMD con 8 lanes
+
+      $display("\n▶ Activando STEP MODE...\n");
+      write_reg(ADDR_CONTROL, CTRL_START | CTRL_STEP_MODE);
+    end
+  endtask
+
+  function bit processing_done();
+    return (ready && !busy);
+  endfunction
+
+  // ------------------------------------------------------------------
+  // Banco de pruebas principal
+  // ------------------------------------------------------------------
+  initial begin
+    rst_n = 1'b0;
+    reg_wr_en = 1'b0;
+    reg_rd_en = 1'b0;
+    reg_addr  = 8'h0;
+    reg_wr_data = 32'h0;
+    reg_rd_data = 32'h0;
+
+    repeat (6) @(posedge clk);
+    rst_n = 1'b1;
+    repeat (6) @(posedge clk);
+
+    configure_and_start();
+
+    $display("\nCycle | State | Busy | Ready | AddrGen | Lanes | Interp | Write | StepWait");
+    $display("------+-------+------+------+---------+-------+--------+-------+---------");
+
+    integer cycle_cnt = 0;
+    integer step_pulses = 0;
+    bit seen_busy = 0;
+    bit was_waiting = 0;
+
+    step_loop: while (cycle_cnt < MAX_CYCLES) begin
+      @(posedge clk);
+      cycle_cnt++;
+
+      if (busy)
+        seen_busy = 1;
+
+      $display("%5d |   %d   |  %b   |  %b   |   %b    |  %b  |   %b    |   %b   |    %b",
+        cycle_cnt,
+        fsm_state,
+        busy,
+        ready,
+        addr_gen_valid,
+        lanes_active,
+        interp_valid_out,
+        result_write_en,
+        in_step_wait
+      );
+
+      if (in_step_wait && !was_waiting) begin
+        was_waiting = 1;
+        pulse_step_next();
+        step_pulses++;
+      end else if (!in_step_wait) begin
+        was_waiting = 0;
+      end
+
+      if (processing_done() && seen_busy) begin
+        $display("\n✓ Procesamiento terminado después de %0d ciclos y %0d pulsos de step_next.\n", cycle_cnt, step_pulses);
+        disable step_loop;
+      end
+    end
+
+    if (cycle_cnt >= MAX_CYCLES)
+      $display("\n✗ Tiempo máximo alcanzado (%0d ciclos).", MAX_CYCLES);
+
+    $finish;
+  end
+
+endmodule

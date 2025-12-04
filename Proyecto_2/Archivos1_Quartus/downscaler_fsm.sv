@@ -1,4 +1,4 @@
-module downscaler_fsm (
+		module downscaler_fsm (
     input  logic clk,
     input  logic rst_n,
 

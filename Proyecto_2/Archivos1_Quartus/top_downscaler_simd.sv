@@ -1,0 +1,311 @@
+// top_downscaler_simd.sv
+// Top-level module para la implementación SIMD del downscaler
+// Integra: address generator, bilinear interpolator, memory, FSM, registros de control, y contadores
+
+`timescale 1ns/1ps
+import fixed_point_pkg::*;
+
+module top_downscaler_simd #(
+  parameter int SIMD_WIDTH = 8,           // N píxeles por ciclo (N >= 4)
+  parameter int ADDR_WIDTH = 18,          // ancho de direcciones de memoria
+  parameter int COORD_WIDTH = 10,         // ancho de coordenadas
+  parameter int REG_ADDR_WIDTH = 8,       // ancho de direcciones de registros
+  parameter int MEM_SIZE = 16384          // tamaño de memoria en bytes (16KB por banco, 64KB total para 4 bancos)
+)(
+  input  logic                       clk,
+  input  logic                       rst_n,
+
+  // Interfaz de registros de control (APB-like)
+  input  logic [REG_ADDR_WIDTH-1:0]  reg_addr,
+  input  logic                       reg_wr_en,
+  input  logic                       reg_rd_en,
+  input  logic [31:0]                reg_wr_data,
+  output logic [31:0]                reg_rd_data,
+
+  // Interfaz de memoria externa (opcional, para carga de datos)
+  output logic [ADDR_WIDTH-1:0]      mem_wr_addr,
+  output logic                       mem_wr_en,
+  output logic [SIMD_WIDTH*8-1:0]    mem_wr_data,
+
+  // Status
+  output logic                       ready,
+  output logic                       busy,
+  output logic                       error
+);
+
+  // =====================================================================
+  // Señales internas
+  // =====================================================================
+
+  // Control signals from registers
+  logic [COORD_WIDTH-1:0]  dst_width;
+  logic [COORD_WIDTH-1:0]  dst_height;
+  fixed_point_t            scale_factor;
+  logic                    mode_simd;
+  logic [2:0]              simd_width_cfg;
+  logic                    ctrl_start;
+  logic                    step_mode;
+  logic                    step_next;
+
+  // Status signals
+  logic                    perf_busy;
+  logic                    perf_ready;
+  logic                    perf_error;
+  logic [31:0]             progress_cnt;
+  logic [31:0]             flops_count;
+  logic [31:0]             mem_reads_cnt;
+  logic [31:0]             mem_writes_cnt;
+
+  // Address generator outputs
+  logic [ADDR_WIDTH-1:0]   addr_tl  [SIMD_WIDTH-1:0];
+  logic [ADDR_WIDTH-1:0]   addr_tr  [SIMD_WIDTH-1:0];
+  logic [ADDR_WIDTH-1:0]   addr_bl  [SIMD_WIDTH-1:0];
+  logic [ADDR_WIDTH-1:0]   addr_br  [SIMD_WIDTH-1:0];
+  fixed_point_t            weight_x [SIMD_WIDTH-1:0];
+  fixed_point_t            weight_y [SIMD_WIDTH-1:0];
+  logic [SIMD_WIDTH-1:0]   lane_valid;
+  logic                    addr_gen_valid;
+  logic                    addr_gen_done;
+
+  // FSM control signals
+  logic                    addr_gen_start;
+  logic                    addr_gen_next;
+  logic                    interpolate_start;
+  logic                    interpolate_done;
+  logic                    result_write_en;
+
+  // Memory interface (read and write)
+  logic [ADDR_WIDTH-1:0]   mem_rd_addr_tl, mem_rd_addr_tr, mem_rd_addr_bl, mem_rd_addr_br;
+  logic [SIMD_WIDTH*8-1:0] mem_rd_data_tl, mem_rd_data_tr, mem_rd_data_bl, mem_rd_data_br;
+  
+  logic [SIMD_WIDTH-1:0][7:0] pixel_tl;
+  logic [SIMD_WIDTH-1:0][7:0] pixel_tr;
+  logic [SIMD_WIDTH-1:0][7:0] pixel_bl;
+  logic [SIMD_WIDTH-1:0][7:0] pixel_br;
+
+  // Interpolator outputs
+  logic                    interp_valid_out;
+  logic [SIMD_WIDTH-1:0][7:0] pixel_out;
+
+  // =====================================================================
+  // Instancia: Control Registers
+  // =====================================================================
+  control_registers #(
+    .ADDR_WIDTH(REG_ADDR_WIDTH)
+  ) ctrl_regs (
+    .clk(clk),
+    .rst_n(rst_n),
+    .addr(reg_addr),
+    .wr_en(reg_wr_en),
+    .rd_en(reg_rd_en),
+    .wr_data(reg_wr_data),
+    .rd_data(reg_rd_data),
+    .img_width(dst_width),
+    .img_height(dst_height),
+    .scale_factor(scale_factor),
+    .mode_simd(mode_simd),
+    .simd_width(simd_width_cfg),
+    .start(ctrl_start),
+    .step_mode(step_mode),
+    .step_next(step_next),
+    .busy(perf_busy),
+    .ready(perf_ready),
+    .error(perf_error),
+    .progress(progress_cnt),
+    .flops_count(flops_count),
+    .mem_reads(mem_reads_cnt),
+    .mem_writes(mem_writes_cnt)
+  );
+
+  // =====================================================================
+  // Instancia: Address Generator SIMD
+  // =====================================================================
+  address_generator_simd #(
+    .SIMD_WIDTH(SIMD_WIDTH),
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .COORD_WIDTH(COORD_WIDTH)
+  ) addr_gen (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(addr_gen_start),
+    .next_pixel(addr_gen_next),
+    .src_width(dst_width),
+    .src_height(dst_height),
+    .scale_factor(scale_factor),
+    .addr_tl(addr_tl),
+    .addr_tr(addr_tr),
+    .addr_bl(addr_bl),
+    .addr_br(addr_br),
+    .weight_x(weight_x),
+    .weight_y(weight_y),
+    .lane_valid(lane_valid),
+    .valid(addr_gen_valid),
+    .done(addr_gen_done)
+  );
+
+  // =====================================================================
+  // Instancia: Image Memory SIMD (lectura de 4 direcciones en paralelo)
+  // =====================================================================
+  // Para simplificar, leemos de 4 bancos de memoria
+  
+  // Banco TL (Top-Left)
+  image_memory_simd #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(8),
+    .SIMD_WIDTH(SIMD_WIDTH),
+    .MEM_SIZE(MEM_SIZE)
+  ) mem_tl (
+    .clk(clk),
+    .rd_base_addr(addr_tl[0]),    // Usamos addr_tl[0] como referencia
+    .rd_data_packed(mem_rd_data_tl),
+    .wr_base_addr('0),
+    .wr_en(1'b0),
+    .wr_data_packed('0)
+  );
+
+  // Banco TR (Top-Right)
+  image_memory_simd #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(8),
+    .SIMD_WIDTH(SIMD_WIDTH),
+    .MEM_SIZE(MEM_SIZE)
+  ) mem_tr (
+    .clk(clk),
+    .rd_base_addr(addr_tr[0]),
+    .rd_data_packed(mem_rd_data_tr),
+    .wr_base_addr('0),
+    .wr_en(1'b0),
+    .wr_data_packed('0)
+  );
+
+  // Banco BL (Bottom-Left)
+  image_memory_simd #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(8),
+    .SIMD_WIDTH(SIMD_WIDTH),
+    .MEM_SIZE(MEM_SIZE)
+  ) mem_bl (
+    .clk(clk),
+    .rd_base_addr(addr_bl[0]),
+    .rd_data_packed(mem_rd_data_bl),
+    .wr_base_addr('0),
+    .wr_en(1'b0),
+    .wr_data_packed('0)
+  );
+
+  // Banco BR (Bottom-Right)
+  image_memory_simd #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(8),
+    .SIMD_WIDTH(SIMD_WIDTH),
+    .MEM_SIZE(MEM_SIZE)
+  ) mem_br (
+    .clk(clk),
+    .rd_base_addr(addr_br[0]),
+    .rd_data_packed(mem_rd_data_br),
+    .wr_base_addr('0),
+    .wr_en(1'b0),
+    .wr_data_packed('0)
+  );
+
+  // Desempaquetamiento de datos de memoria
+  always_comb begin
+    for (int i = 0; i < SIMD_WIDTH; i++) begin
+      pixel_tl[i] = mem_rd_data_tl[(SIMD_WIDTH-i)*8-1 -: 8];
+      pixel_tr[i] = mem_rd_data_tr[(SIMD_WIDTH-i)*8-1 -: 8];
+      pixel_bl[i] = mem_rd_data_bl[(SIMD_WIDTH-i)*8-1 -: 8];
+      pixel_br[i] = mem_rd_data_br[(SIMD_WIDTH-i)*8-1 -: 8];
+    end
+  end
+
+  // =====================================================================
+  // Instancia: Bilinear Interpolator SIMD
+  // =====================================================================
+  bilinear_interpolator_simd #(
+    .SIMD_WIDTH(SIMD_WIDTH)
+  ) interpolator (
+    .clk(clk),
+    .rst_n(rst_n),
+    .valid_in(addr_gen_valid),
+    .pixel_tl(pixel_tl),
+    .pixel_tr(pixel_tr),
+    .pixel_bl(pixel_bl),
+    .pixel_br(pixel_br),
+    .weight_x(weight_x),
+    .weight_y(weight_y),
+    .valid_out(interp_valid_out),
+    .pixel_out(pixel_out)
+  );
+
+  // =====================================================================
+  // Instancia: Downscaler FSM
+  // =====================================================================
+  downscaler_fsm fsm (
+    .clk(clk),
+    .rst_n(rst_n),
+    .start(ctrl_start),
+    .step_mode(step_mode),
+    .step_next(step_next),
+    .addr_gen_done(addr_gen_done),
+    .addr_gen_start(addr_gen_start),
+    .addr_gen_next(addr_gen_next),
+    .interpolate_start(interpolate_start),
+    .interpolate_done(interp_valid_out),
+    .result_write_en(result_write_en),
+    .busy(perf_busy),
+    .ready(perf_ready),
+    .error(perf_error)
+  );
+
+  // =====================================================================
+  // Contador de progreso
+  // =====================================================================
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      progress_cnt <= 32'h0;
+    end else begin
+      if (!ctrl_start) begin
+        progress_cnt <= 32'h0;
+      end else if (result_write_en) begin
+        progress_cnt <= progress_cnt + SIMD_WIDTH;
+      end
+    end
+  end
+
+  // =====================================================================
+  // Contadores de rendimiento
+  // =====================================================================
+  logic flop_inc;
+  logic mem_read_inc;
+  logic mem_write_inc;
+
+  assign flop_inc = (interpolate_start && mode_simd) ? 1'b1 : 1'b0;
+  assign mem_read_inc = addr_gen_valid ? 1'b1 : 1'b0;
+  assign mem_write_inc = result_write_en ? 1'b1 : 1'b0;
+
+  performance_counters perf_counters (
+    .clk(clk),
+    .rst_n(rst_n),
+    .clear(~ctrl_start),
+    .flop_inc(flop_inc),
+    .flop_count(32'd8),  // SIMD_WIDTH operaciones por ciclo
+    .mem_read_inc(mem_read_inc),
+    .mem_write_inc(mem_write_inc),
+    .total_flops(flops_count),
+    .total_mem_reads(mem_reads_cnt),
+    .total_mem_writes(mem_writes_cnt)
+  );
+
+  // =====================================================================
+  // Asignaciones de salida
+  // =====================================================================
+  assign ready = perf_ready;
+  assign busy = perf_busy;
+  assign error = perf_error;
+
+  // Escritura de memoria (para testbench)
+  assign mem_wr_addr = '0;
+  assign mem_wr_en = 1'b0;
+  assign mem_wr_data = '0;
+
+endmodule

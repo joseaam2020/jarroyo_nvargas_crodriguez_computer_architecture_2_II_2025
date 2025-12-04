@@ -1,189 +1,159 @@
 `timescale 1ns/1ps
 
-module tb_downscaler_fsm;
+module downscaler_fsm (
+    input  logic clk,
+    input  logic rst_n,
 
-    logic clk;
-    logic rst_n;
-    logic start;
-    logic step_mode;
-    logic step_next;
-    logic addr_gen_done;
-    logic addr_gen_start;
-    logic addr_gen_next;
-    logic interpolate_start;
-    logic interpolate_done;
-    logic result_write_en;
-    logic busy;
-    logic ready;
-    logic error;
+    // control
+    input  logic start,
+    input  logic step_mode,
+    input  logic step_next,
 
-    // Instancia del DUT
-    downscaler_fsm dut (
-        .clk(clk),
-        .rst_n(rst_n),
-        .start(start),
-        .step_mode(step_mode),
-        .step_next(step_next),
-        .addr_gen_done(addr_gen_done),
-        .addr_gen_start(addr_gen_start),
-        .addr_gen_next(addr_gen_next),
-        .interpolate_start(interpolate_start),
-        .interpolate_done(interpolate_done),
-        .result_write_en(result_write_en),
-        .busy(busy),
-        .ready(ready),
-        .error(error)
-    );
+    // address generator
+    input  logic addr_gen_done,
+    output logic addr_gen_start,
+    output logic addr_gen_next,
 
-    // Generador de reloj
-    initial begin
-        clk = 0;
-        forever #5 clk = ~clk; // 100MHz (periodo 10ns)
+    // interpolation
+    output logic interpolate_start,
+    input  logic interpolate_done,
+
+    // writeback
+    output logic result_write_en,
+
+    // status
+    output logic busy,
+    output logic ready,
+    output logic error
+);
+
+    // STATES
+    localparam IDLE         = 3'd0;
+    localparam FETCH        = 3'd1;
+    localparam INTERPOLATE  = 3'd2;
+    localparam WRITE        = 3'd3;
+    localparam STEP_WAIT    = 3'd4;
+    localparam DONE         = 3'd5;
+
+    logic [2:0] state, next_state;
+
+    // STATE REGISTER
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            state <= IDLE;
+        else
+            state <= next_state;
     end
 
-    // Monitor continuo - imprime TODO en cada ciclo
-    always @(posedge clk) begin
-        $display("[%0t] STATE=%0d | busy=%0b ready=%0b | addr_done=%0b interp_done=%0b | addr_start=%0b addr_next=%0b interp_start=%0b write_en=%0b", 
-                 $time, dut.state, busy, ready, addr_gen_done, interpolate_done, 
-                 addr_gen_start, addr_gen_next, interpolate_start, result_write_en);
-    end
+    // OUTPUTS + NEXT STATE LOGIC
+    always_comb begin
+        // defaults
+        addr_gen_start    = 1'b0;
+        addr_gen_next     = 1'b0;
+        interpolate_start = 1'b0;
+        result_write_en   = 1'b0;
 
-    // Proceso de prueba
-    initial begin
-        $display("\n========================================");
-        $display("INICIO DE SIMULACION");
-        $display("========================================\n");
-        
-        // Inicialización
-        rst_n = 0;
-        start = 0;
-        step_mode = 0;
-        step_next = 0;
-        addr_gen_done = 0;
-        interpolate_done = 0;
-        
-        // Reset
-        repeat(2) @(posedge clk);
-        rst_n = 1;
-        $display("\n*** RESET COMPLETADO - FSM en IDLE ***\n");
-        
-        repeat(2) @(posedge clk);
+        busy  = 1'b1;  // Siempre busy excepto en IDLE/DONE
+        ready = 1'b0;
+        error = 1'b0;
 
-        // ============================================
-        // TEST 1: MODO AUTOMATICO - 3 pixeles
-        // ============================================
-        $display("\n========================================");
-        $display("TEST 1: MODO AUTOMATICO (3 pixeles)");
-        $display("========================================\n");
-        
-        step_mode = 0;
-        
-        @(posedge clk);
-        start = 1;
-        $display(">>> START=1 - Iniciando procesamiento");
-        
-        @(posedge clk);
-        start = 0;
-        
-        // --- PIXEL 1 ---
-        $display("\n--- PIXEL 1 ---");
-        repeat(2) @(posedge clk);
-        interpolate_done = 1;
-        $display(">>> INTERPOLATE_DONE=1");
-        
-        @(posedge clk);
-        interpolate_done = 0;
-        
-        // --- PIXEL 2 ---
-        $display("\n--- PIXEL 2 ---");
-        repeat(2) @(posedge clk);
-        interpolate_done = 1;
-        $display(">>> INTERPOLATE_DONE=1");
-        
-        @(posedge clk);
-        interpolate_done = 0;
-        
-        // --- PIXEL 3 (ULTIMO) ---
-        $display("\n--- PIXEL 3 (ULTIMO) ---");
-        repeat(2) @(posedge clk);
-        addr_gen_done = 1;
-        interpolate_done = 1;
-        $display(">>> ADDR_GEN_DONE=1 + INTERPOLATE_DONE=1");
-        
-        @(posedge clk);
-        interpolate_done = 0;
-        addr_gen_done = 0;
-        
-        repeat(3) @(posedge clk);
-        $display("\n*** TEST 1 COMPLETADO ***\n");
+        next_state = state;
 
-        // ============================================
-        // TEST 2: MODO STEP - 2 pixeles
-        // ============================================
-        $display("\n========================================");
-        $display("TEST 2: MODO STEP (2 pixeles)");
-        $display("========================================\n");
-        
-        step_mode = 1;
-        
-        @(posedge clk);
-        start = 1;
-        $display(">>> START=1 - Modo STEP activado");
-        
-        @(posedge clk);
-        start = 0;
-        
-        // --- PIXEL 1 ---
-        $display("\n--- PIXEL 1 (STEP) ---");
-        repeat(2) @(posedge clk);
-        interpolate_done = 1;
-        $display(">>> INTERPOLATE_DONE=1");
-        
-        @(posedge clk);
-        interpolate_done = 0;
-        
-        // Esperar en STEP_WAIT
-        $display("\n*** Esperando en STEP_WAIT ***");
-        repeat(3) @(posedge clk);
-        
-        step_next = 1;
-        $display(">>> STEP_NEXT=1 - Avanzando al siguiente pixel");
-        
-        @(posedge clk);
-        step_next = 0;
-        
-        // --- PIXEL 2 (ULTIMO) ---
-        $display("\n--- PIXEL 2 (ULTIMO, STEP) ---");
-        repeat(2) @(posedge clk);
-        addr_gen_done = 1;
-        interpolate_done = 1;
-        $display(">>> ADDR_GEN_DONE=1 + INTERPOLATE_DONE=1");
-        
-        @(posedge clk);
-        interpolate_done = 0;
-        
-        repeat(2) @(posedge clk);
-        step_next = 1;
-        $display(">>> STEP_NEXT=1 - Finalizando");
-        
-        @(posedge clk);
-        step_next = 0;
-        addr_gen_done = 0;
-        
-        repeat(3) @(posedge clk);
-        $display("\n*** TEST 2 COMPLETADO ***\n");
+        case (state)
 
-        $display("\n========================================");
-        $display("FIN DE SIMULACION - TODO CORRECTO");
-        $display("========================================\n");
-        $finish;
-    end
+        // ---------------------------------------------------------
+        // IDLE
+        // ---------------------------------------------------------
+        IDLE: begin
+            busy = 1'b0;  // No busy en IDLE
+            ready = 1'b1;
 
-    // Timeout de seguridad
-    initial begin
-        #5000;
-        $display("\n!!! TIMEOUT - La simulacion tardo demasiado !!!");
-        $finish;
+            if (start) begin
+                addr_gen_start = 1'b1;
+                next_state = FETCH;
+            end
+        end
+
+        // ---------------------------------------------------------
+        // FETCH → pasa directo a INTERPOLATE
+        // ---------------------------------------------------------
+        FETCH: begin
+            // busy ya es 1
+            addr_gen_start = 1'b1;  // mantener activo
+
+            next_state = INTERPOLATE;
+        end
+
+        // ---------------------------------------------------------
+        // INTERPOLATE - ESPERA A TODAS LAS LANES SIMD
+        // ---------------------------------------------------------
+        INTERPOLATE: begin
+            interpolate_start = 1'b1;
+
+            if (interpolate_done) begin
+                result_write_en = 1'b1;
+
+                if (!step_mode) begin
+                    // ------------------ MODO AUTOMÁTICO -------------------
+                    if (addr_gen_done) begin
+                        next_state = DONE;
+                    end else begin
+                        addr_gen_next = 1'b1; // solicitar siguiente bloque/pixel
+                        next_state = FETCH;
+                    end
+                end else begin
+                    // ------------------ MODO STEP --------------------------
+                    next_state = WRITE;
+                end
+            end
+        end
+
+        // ---------------------------------------------------------
+        // WRITE (solo en step mode)
+        // ---------------------------------------------------------
+        WRITE: begin
+            result_write_en = 1'b1;
+            next_state = STEP_WAIT;
+        end
+
+        // ---------------------------------------------------------
+        // STEP_WAIT – espera step_next
+        // ---------------------------------------------------------
+        STEP_WAIT: begin
+            if (step_mode) begin
+                if (step_next) begin
+                    if (addr_gen_done)
+                        next_state = DONE;
+                    else begin
+                        addr_gen_next = 1'b1;
+                        next_state = FETCH;
+                    end
+                end
+            end else begin
+                // fallback automático (por seguridad)
+                if (addr_gen_done)
+                    next_state = DONE;
+                else begin
+                    addr_gen_next = 1'b1;
+                    next_state = FETCH;
+                end
+            end
+        end
+
+        // ---------------------------------------------------------
+        // DONE → IDLE
+        // ---------------------------------------------------------
+        DONE: begin
+            ready = 1'b1;
+            next_state = IDLE;
+        end
+
+        default: begin
+            error = 1'b1;
+            next_state = IDLE;
+        end
+
+        endcase
     end
 
 endmodule

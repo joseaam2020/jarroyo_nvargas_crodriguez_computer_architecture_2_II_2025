@@ -1,0 +1,84 @@
+`timescale 1ns/1ps
+
+module tb_mem_test();
+
+    // Señales básicas
+    reg clk;
+    reg rst_n;
+
+    // Señales hacia tu módulo
+    reg         mem_rd_en;
+    reg [31:0]  mem_addr;
+    wire [31:0] mem_rdata;
+
+    // Instanciar TU módulo que usa la memoria (DUT)
+    // Aquí solo pongo un placeholder; tú pon tu módulo real
+    my_module DUT (
+        .clk(clk),
+        .rst_n(rst_n),
+        .mem_rd_en(mem_rd_en),
+        .mem_addr(mem_addr),
+        .mem_rdata(mem_rdata)
+    );
+
+    //-------------------------------------------------------
+    // CLOCK
+    //-------------------------------------------------------
+    initial clk = 0;
+    always #5 clk = ~clk;   // 100 MHz
+
+    //-------------------------------------------------------
+    // TEST MEMORY HARDCODEADA
+    //-------------------------------------------------------
+    reg [1:0] test_sel = 0;
+
+    assign mem_rdata = (test_sel == 0) ? 32'hAAAA_AAAA :
+                       (test_sel == 1) ? 32'h5555_5555 :
+                                         32'hDEAD_BEEF;  // fallback
+
+    //-------------------------------------------------------
+    // ESTÍMULOS
+    //-------------------------------------------------------
+    initial begin
+        rst_n = 0;
+        mem_rd_en = 0;
+        mem_addr = 0;
+
+        #20;
+        rst_n = 1;
+
+        //---------------------------------------------------
+        // TEST A - Memoria fija AAAA_AAAA
+        //---------------------------------------------------
+        $display("------ TEST A: mem = AAAA_AAAA ------");
+        test_sel = 0;
+        repeat(5) begin
+            @(posedge clk);
+            mem_rd_en = 1;
+            mem_addr  = $random;
+        end
+
+        mem_rd_en = 0;
+        #20;
+
+        //---------------------------------------------------
+        // TEST B - Memoria fija 5555_5555
+        //---------------------------------------------------
+        $display("------ TEST B: mem = 5555_5555 ------");
+        test_sel = 1;
+        repeat(5) begin
+            @(posedge clk);
+            mem_rd_en = 1;
+            mem_addr  = $random;
+        end
+
+        mem_rd_en = 0;
+        #20;
+
+        //---------------------------------------------------
+        // FIN
+        //---------------------------------------------------
+        $display("FIN DEL TEST");
+        $stop;
+    end
+endmodule

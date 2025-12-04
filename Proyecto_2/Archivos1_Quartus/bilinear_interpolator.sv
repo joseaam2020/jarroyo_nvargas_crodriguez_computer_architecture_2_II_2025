@@ -1,49 +1,136 @@
+// bilinear_interpolator.sv
+// Interpolador bilineal single-lane para usar en el módulo SIMD
+// Realiza interpolación bilineal: resultado = f(tl, tr, bl, br, weight_x, weight_y)
+
+`timescale 1ns/1ps
 import fixed_point_pkg::*;
 
 module bilinear_interpolator (
-  input logic clk, rst_n, valid_in,
-  input logic [7:0] pixel_tl, pixel_tr, pixel_bl, pixel_br,
-  input fixed_point_t weight_x, weight_y,
-  output logic valid_out,
-  output logic [7:0] pixel_out
+  input  logic                clk,
+  input  logic                rst_n,
+  input  logic                valid_in,
+
+  // 4 píxeles vecinos
+  input  logic [7:0]          pixel_tl,  // top-left
+  input  logic [7:0]          pixel_tr,  // top-right
+  input  logic [7:0]          pixel_bl,  // bottom-left
+  input  logic [7:0]          pixel_br,  // bottom-right
+
+  // Pesos de interpolación (formato fixed-point 8.8)
+  input  fixed_point_t        weight_x,  // peso horizontal (0.0 a 1.0)
+  input  fixed_point_t        weight_y,  // peso vertical (0.0 a 1.0)
+
+  // Salida
+  output logic                valid_out,
+  output logic [7:0]          pixel_out
 );
-  logic [15:0] pixel_tl_fixed, pixel_tr_fixed, pixel_bl_fixed, pixel_br_fixed;
-  fixed_point_t weight_x_inv, weight_y_inv;
-  fixed_point_t prod_tl, prod_tr, prod_bl, prod_br;
-  fixed_point_t interp_top, interp_bottom, result;
-  logic [2:0] valid_pipe;
+
+  // =====================================================================
+  // Pipeline de interpolación bilineal (latencia = 4 ciclos)
+  // =====================================================================
   
-  always_comb begin
-    pixel_tl_fixed = {pixel_tl, 8'h00};
-    pixel_tr_fixed = {pixel_tr, 8'h00};
-    pixel_bl_fixed = {pixel_bl, 8'h00};
-    pixel_br_fixed = {pixel_br, 8'h00};
-    weight_x_inv = 16'h0100 - weight_x;
-    weight_y_inv = 16'h0100 - weight_y;
-  end
-  
+  // Stage 0: Entrada (registros)
+  logic [7:0] tl_s0, tr_s0, bl_s0, br_s0;
+  fixed_point_t wx_s0, wy_s0;
+  logic valid_s0;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      prod_tl <= 16'h0; prod_tr <= 16'h0; prod_bl <= 16'h0; prod_br <= 16'h0;
-      interp_top <= 16'h0; interp_bottom <= 16'h0; result <= 16'h0;
-      valid_pipe <= 3'b0;
+      tl_s0 <= 8'h00;
+      tr_s0 <= 8'h00;
+      bl_s0 <= 8'h00;
+      br_s0 <= 8'h00;
+      wx_s0 <= 16'h0000;
+      wy_s0 <= 16'h0000;
+      valid_s0 <= 1'b0;
     end else begin
-      prod_tl <= fixed_mult(pixel_tl_fixed, weight_x_inv);
-      prod_tl <= fixed_mult(prod_tl, weight_y_inv);
-      prod_tr <= fixed_mult(pixel_tr_fixed, weight_x);
-      prod_tr <= fixed_mult(prod_tr, weight_y_inv);
-      prod_bl <= fixed_mult(pixel_bl_fixed, weight_x_inv);
-      prod_bl <= fixed_mult(prod_bl, weight_y);
-      prod_br <= fixed_mult(pixel_br_fixed, weight_x);
-      prod_br <= fixed_mult(prod_br, weight_y);
-      
-      interp_top <= fixed_add(prod_tl, prod_tr);
-      interp_bottom <= fixed_add(prod_bl, prod_br);
-      result <= fixed_add(interp_top, interp_bottom);
-      valid_pipe <= {valid_pipe[1:0], valid_in};
+      tl_s0 <= pixel_tl;
+      tr_s0 <= pixel_tr;
+      bl_s0 <= pixel_bl;
+      br_s0 <= pixel_br;
+      wx_s0 <= weight_x;
+      wy_s0 <= weight_y;
+      valid_s0 <= valid_in;
     end
   end
-  
-  assign pixel_out = result[15:8];
-  assign valid_out = valid_pipe[2];
+
+  // Stage 1: Interpolación horizontal (top e inferior)
+  // top_lerp = tl + wx * (tr - tl)
+  // bot_lerp = bl + wx * (br - bl)
+  logic [15:0] top_lerp_s1, bot_lerp_s1;
+  logic valid_s1;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      top_lerp_s1 <= 16'h0000;
+      bot_lerp_s1 <= 16'h0000;
+      valid_s1 <= 1'b0;
+    end else begin
+      // top_lerp = tl + (wx * (tr - tl)) >> 8
+      top_lerp_s1 <= {8'h00, tl_s0} + fixed_mult(wx_s0, {8'h00, (tr_s0 - tl_s0)});
+      
+      // bot_lerp = bl + (wx * (br - bl)) >> 8
+      bot_lerp_s1 <= {8'h00, bl_s0} + fixed_mult(wx_s0, {8'h00, (br_s0 - bl_s0)});
+      
+      valid_s1 <= valid_s0;
+    end
+  end
+
+  // Stage 2: Saturación después de interpolación horizontal
+  logic [7:0] top_sat_s2, bot_sat_s2;
+  logic valid_s2;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      top_sat_s2 <= 8'h00;
+      bot_sat_s2 <= 8'h00;
+      valid_s2 <= 1'b0;
+    end else begin
+      // Saturar a 8 bits
+      top_sat_s2 <= (top_lerp_s1[15:8] > 8'hFF) ? 8'hFF : top_lerp_s1[7:0];
+      bot_sat_s2 <= (bot_lerp_s1[15:8] > 8'hFF) ? 8'hFF : bot_lerp_s1[7:0];
+      valid_s2 <= valid_s1;
+    end
+  end
+
+  // Stage 3: Interpolación vertical
+  // resultado = top_sat + wy * (bot_sat - top_sat)
+  logic [15:0] final_lerp_s3;
+  logic valid_s3;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      final_lerp_s3 <= 16'h0000;
+      valid_s3 <= 1'b0;
+    end else begin
+      // final = top_sat + (wy * (bot_sat - top_sat)) >> 8
+      final_lerp_s3 <= {8'h00, top_sat_s2} + fixed_mult(wy_s0, {8'h00, (bot_sat_s2 - top_sat_s2)});
+      valid_s3 <= valid_s2;
+    end
+  end
+
+  // Stage 4: Saturación final
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pixel_out <= 8'h00;
+      valid_out <= 1'b0;
+    end else begin
+      // Saturar resultado final a 8 bits
+      pixel_out <= (final_lerp_s3[15:8] > 8'hFF) ? 8'hFF : final_lerp_s3[7:0];
+      valid_out <= valid_s3;
+    end
+  end
+
+  // =====================================================================
+  // Función auxiliar para multiplicación fixed-point
+  // =====================================================================
+  function automatic logic [15:0] fixed_mult(
+    input logic [15:0] a,
+    input logic [15:0] b
+  );
+    logic [31:0] product;
+    product = a * b;
+    return product[23:8];  // Tomar los 16 bits del medio (desplazar 8 bits)
+  endfunction
+
 endmodule
